@@ -98,6 +98,7 @@ export type GameStage = {
   palette: StagePalette;
   track: TrackConfig;
   introLine: string;
+  objectiveLine: string;
   girlPresences: StageGirlPresence[];
   interactables: StageInteractable[];
   exitDialog: StageExitDialog;
@@ -160,6 +161,7 @@ export const gameStages: GameStage[] = [
       fallbackDurationSeconds: 75,
     },
     introLine: "La noche se prende en azoteas de colores mientras ella empieza a dibujarse en el cielo.",
+    objectiveLine: "Toca los brillos de la azotea para caminar, juntar 4 fragmentos y despues tocar la puerta dorada.",
     girlPresences: [
       { position: { x: 268, y: 116 }, scale: 1.1, state: "distant", appearAfterFragments: 0 },
       { position: { x: 406, y: 108 }, scale: 1.28, state: "soft", appearAfterFragments: 2 },
@@ -273,6 +275,7 @@ export const gameStages: GameStage[] = [
       fallbackDurationSeconds: 56,
     },
     introLine: "Las luces del pasaje se acomodan como si supieran que su sonrisa esta por entrar en escena.",
+    objectiveLine: "Segui tocando luces y objetos para activar escenas, completar 4 fragmentos y abrir la salida.",
     girlPresences: [
       { position: { x: 252, y: 116 }, scale: 1.18, state: "soft", appearAfterFragments: 0 },
       { position: { x: 396, y: 96 }, scale: 1.34, state: "smile", appearAfterFragments: 2 },
@@ -385,6 +388,7 @@ export const gameStages: GameStage[] = [
       fallbackDurationSeconds: 40,
     },
     introLine: "El cielo se vuelve jardin y todo se siente mas raro, mas lindo y mas de ella.",
+    objectiveLine: "Explora el jardin, activa cada punto brillante y completa el medidor lunar antes de avanzar.",
     girlPresences: [
       { position: { x: 250, y: 122 }, scale: 1.2, state: "smile", appearAfterFragments: 0 },
       { position: { x: 392, y: 104 }, scale: 1.38, state: "radiant", appearAfterFragments: 2 },
@@ -497,6 +501,7 @@ export const gameStages: GameStage[] = [
       fallbackDurationSeconds: 78,
     },
     introLine: "El camino final sube hacia la luna completa, y vos solo queres llegar para mirarla.",
+    objectiveLine: "Toca los puntos del mirador, reuni los 4 fragmentos finales y entra en la escena final.",
     girlPresences: [
       { position: { x: 310, y: 112 }, scale: 1.22, state: "radiant", appearAfterFragments: 0 },
       { position: { x: 446, y: 86 }, scale: 1.48, state: "moonwatch", appearAfterFragments: 2 },
@@ -593,4 +598,3 @@ export function getStageProgress(stage: GameStage, interactedIds: string[]) {
     isComplete: collected >= stage.fragmentCount,
   };
 }
-

@@ -211,7 +211,8 @@ canvas {
 
 .title-screen__start,
 .moon-dialog__button,
-.game-shell__mute {
+.game-shell__mute,
+.game-shell__audio-boost {
   border: 3px solid rgba(255, 255, 255, 0.16);
   cursor: pointer;
 }
@@ -260,6 +261,14 @@ canvas {
   line-height: 1.4;
 }
 
+.game-shell__objective {
+  margin: 0.45rem 0 0;
+  max-width: 14rem;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
 .game-shell__eyebrow {
   font-size: 0.46rem;
   color: var(--turquoise);
@@ -302,6 +311,22 @@ canvas {
   text-transform: uppercase;
 }
 
+.game-shell__controls {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
+.game-shell__audio-boost {
+  padding: 0.5rem 0.65rem;
+  background: linear-gradient(180deg, #74f7ff, #59cde7);
+  color: #160a25;
+  font-family: var(--font-display), monospace;
+  font-size: 0.42rem;
+  text-transform: uppercase;
+  box-shadow: 0 6px 0 #247f98;
+}
+
 .game-shell__canvas-wrap {
   position: relative;
   margin-top: 0.9rem;
@@ -336,6 +361,12 @@ canvas {
   color: var(--text-soft);
   font-size: 1.28rem;
   line-height: 1;
+}
+
+.game-shell__story-help {
+  color: var(--text);
+  opacity: 0.9;
+  font-size: 1.02rem;
 }
 
 .game-shell__story-footer {
@@ -573,6 +604,10 @@ canvas {
     font-size: 0.5rem;
   }
 
+  .game-shell__audio-boost {
+    font-size: 0.46rem;
+  }
+
   .game-shell__story-card {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
@@ -581,6 +616,10 @@ canvas {
   .game-shell__story-card p {
     font-size: 1.5rem;
     grid-column: 1 / -1;
+  }
+
+  .game-shell__story-help {
+    font-size: 1.08rem;
   }
 
   .game-shell__story-footer {

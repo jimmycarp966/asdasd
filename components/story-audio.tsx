@@ -39,6 +39,7 @@ type YTPlayer = {
 
 type StoryAudioProps = {
   activeStage: number;
+  playNonce: number;
   started: boolean;
   muted: boolean;
   onAudioProgress: (progress: number) => void;
@@ -58,6 +59,7 @@ function getStageDuration(stageIndex: number) {
 
 export function StoryAudio({
   activeStage,
+  playNonce,
   started,
   muted,
   onAudioProgress,
@@ -154,6 +156,12 @@ export function StoryAudio({
         player.seekTo(stage.track.startSeconds, true);
         fadeTo(0, mutedRef.current ? 0 : audioTargetVolume);
       }, 300);
+
+      window.setTimeout(() => {
+        if (currentPlayerStageRef.current !== stageIndex) return;
+        player.seekTo(stage.track.startSeconds, true);
+        player.playVideo();
+      }, 900);
     };
 
     if (immediate) {
@@ -296,6 +304,12 @@ export function StoryAudio({
     const immediate = currentPlayerStageRef.current < 0 || currentPlayerStageRef.current === activeStage;
     playStage(activeStage, immediate);
   }, [activeStage, playStage, started]);
+
+  useEffect(() => {
+    if (!started) return;
+    if (!apiReadyRef.current || !playerRef.current || !playerReadyRef.current) return;
+    playStage(activeStage, true);
+  }, [playNonce, playStage, started, activeStage]);
 
   return <div ref={hostRef} className="story-audio-host" aria-hidden="true" />;
 }

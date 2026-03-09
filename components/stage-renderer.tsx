@@ -295,6 +295,10 @@ function drawInteractable(
   const pulse = highlighted ? 1 : 0.7 + (Math.sin(animationMs / 260 + position.x) + 1) * 0.15;
   const glowColor = highlighted ? stage.palette.accentSoft : stage.palette.turquoise;
 
+  ctx.fillStyle = `rgba(255, 247, 210, ${0.12 + pulse * 0.14})`;
+  ctx.fillRect(position.x - 14, position.y - 26, 28, 3);
+  ctx.fillRect(position.x - 1, position.y - 31, 2, 7);
+  ctx.fillRect(position.x - 1, position.y - 20, 2, 3);
   ctx.fillStyle = `rgba(255, 255, 255, ${0.12 + pulse * 0.14})`;
   ctx.fillRect(position.x - 10, position.y + 8, 20, 4);
   ctx.fillStyle = glowColor;
@@ -412,6 +416,10 @@ function drawExit(
     ctx.fillRect(x - 8, y - 8, 52, 52);
     ctx.fillStyle = stage.palette.accentSoft;
     ctx.fillRect(x + 10, y + 14, 16, 14);
+    ctx.fillStyle = stage.palette.accentSoft;
+    ctx.fillRect(x + 12, y - 18, 12, 3);
+    ctx.fillRect(x + 17, y - 24, 2, 6);
+    ctx.fillRect(x + 17, y - 14, 2, 3);
   } else {
     ctx.fillStyle = stage.palette.groundB;
     ctx.fillRect(x + 10, y + 14, 16, 14);
@@ -486,6 +494,11 @@ function renderPlayingScene(
 
   for (const item of stage.interactables) {
     if (interactedIds.includes(item.id)) continue;
+    const emphasize = fragmentsCollected === 0
+      ? item.id === stage.interactables[0]?.id
+      : target
+        ? distance(item.position, target) < 10
+        : false;
     drawInteractable(
       ctx,
       stage,
@@ -494,7 +507,7 @@ function renderPlayingScene(
         x: item.position.x - camera.x,
         y: item.position.y - camera.y,
       },
-      target ? distance(item.position, target) < 10 : false,
+      emphasize,
       animationMs,
     );
   }
@@ -777,7 +790,7 @@ export const StageRenderer = forwardRef<StageRendererHandle, StageRendererProps>
         const fragmentsCollected = collectCount(stageRef.current, interactedRef.current);
         if (
           fragmentsCollected >= stageRef.current.fragmentCount &&
-          distance(stageRef.current.exit, worldPoint) <= 28
+          distance(stageRef.current.exit, worldPoint) <= 40
         ) {
           pendingActionRef.current = { type: "exit" };
           targetRef.current = { ...stageRef.current.exit };

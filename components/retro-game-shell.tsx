@@ -44,9 +44,11 @@ export function RetroGameShell() {
   const [interactedIds, setInteractedIds] = useState<string[]>([]);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog | null>(null);
   const [muted, setMuted] = useState(false);
+  const [audioKick, setAudioKick] = useState(0);
   const [audioProgress, setAudioProgress] = useState(0);
   const [finalTrackEnded, setFinalTrackEnded] = useState(false);
   const [cutsceneSeconds, setCutsceneSeconds] = useState(0);
+  const [secondsSinceStart, setSecondsSinceStart] = useState(0);
 
   const canvasRef = useRef<StageRendererHandle | null>(null);
   const cutsceneRafRef = useRef<number | null>(null);
@@ -59,15 +61,23 @@ export function RetroGameShell() {
   const cutsceneReveal = clamp(Math.max(audioProgress, finalTrackEnded ? 1 : cutsceneSeconds / 5.5));
   const stageLabel = `${stage.label} / ${stageCount}`;
   const fragmentLabel = `${stageProgress.collected}/${stage.fragmentCount} fragmentos`;
+  const objectiveText = stageProgress.isComplete
+    ? "Ya juntaste los 4 fragmentos. Toca la puerta dorada para pasar."
+    : stageProgress.collected === 0
+      ? "Toca cualquier brillo del mapa para empezar a caminar y activar la historia."
+      : `Vas ${stageProgress.collected}/${stage.fragmentCount}. Segui tocando brillos y objetos para completar la luna.`;
+  const audioLooksStuck = started && !muted && mode === "playing" && secondsSinceStart > 3.5 && audioProgress < 0.02;
 
   const startAdventure = () => {
     setMode("playing");
     setActiveStageIndex(0);
     setInteractedIds([]);
     setActiveDialog(null);
+    setAudioKick((current) => current + 1);
     setAudioProgress(0);
     setFinalTrackEnded(false);
     setCutsceneSeconds(0);
+    setSecondsSinceStart(0);
   };
 
   const handleInteract = (interactionId: string) => {
@@ -102,6 +112,7 @@ export function RetroGameShell() {
       setCutsceneSeconds(0);
       setAudioProgress(0);
       setFinalTrackEnded(false);
+      setSecondsSinceStart(0);
       return;
     }
 
@@ -110,6 +121,7 @@ export function RetroGameShell() {
     setActiveDialog(null);
     setAudioProgress(0);
     setFinalTrackEnded(false);
+    setSecondsSinceStart(0);
   };
 
   const continueDialog = () => {
@@ -123,6 +135,19 @@ export function RetroGameShell() {
 
     setActiveDialog(null);
   };
+
+  useEffect(() => {
+    if (!started) return;
+
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => {
+      setSecondsSinceStart((performance.now() - startedAt) / 1000);
+    }, 250);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeStageIndex, mode, started]);
 
   useEffect(() => {
     if (mode !== "cutscene") {
@@ -205,6 +230,7 @@ export function RetroGameShell() {
       {started ? (
         <StoryAudio
           activeStage={activeStageIndex}
+          playNonce={audioKick}
           started={started}
           muted={muted}
           onAudioProgress={setAudioProgress}
@@ -249,6 +275,7 @@ export function RetroGameShell() {
               <div className="game-shell__hud-block">
                 <span className="game-shell__eyebrow">{stageLabel}</span>
                 <strong>{stage.stageTitle}</strong>
+                <p className="game-shell__objective">{objectiveText}</p>
               </div>
 
               <div className="game-shell__meter">
@@ -265,13 +292,25 @@ export function RetroGameShell() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                className="game-shell__mute"
-                onClick={() => setMuted((current) => !current)}
-              >
-                {muted ? "Unmute" : "Mute"}
-              </button>
+              <div className="game-shell__controls">
+                <button
+                  type="button"
+                  className="game-shell__mute"
+                  onClick={() => setMuted((current) => !current)}
+                >
+                  {muted ? "Activar audio" : "Mute"}
+                </button>
+
+                {audioLooksStuck ? (
+                  <button
+                    type="button"
+                    className="game-shell__audio-boost"
+                    onClick={() => setAudioKick((current) => current + 1)}
+                  >
+                    Reproducir musica
+                  </button>
+                ) : null}
+              </div>
             </header>
 
             <div className="game-shell__canvas-wrap">
@@ -294,6 +333,7 @@ export function RetroGameShell() {
             <footer className="game-shell__story-card">
               <span className="game-shell__eyebrow">{stage.track.title}</span>
               <p>{stage.introLine}</p>
+              <p className="game-shell__story-help">{stage.objectiveLine}</p>
               <div className="game-shell__story-footer">
                 <span>{fragmentLabel}</span>
                 <span>{stageProgress.isComplete ? "Salida abierta" : "La luna sigue juntandose"}</span>
