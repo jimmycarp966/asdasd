@@ -38,9 +38,12 @@ select {
   font: inherit;
 }
 
-svg,
 canvas {
   image-rendering: pixelated;
+}
+
+svg {
+  image-rendering: auto;
 }
 
 .story-audio-host {
@@ -132,6 +135,7 @@ canvas {
 .title-screen__portrait {
   width: 6.4rem;
   height: 6.4rem;
+  filter: drop-shadow(0 10px 18px rgba(12, 6, 23, 0.28));
 }
 
 .title-screen__copy {
@@ -178,10 +182,12 @@ canvas {
   position: relative;
   height: 8rem;
   margin-top: 1.2rem;
+  pointer-events: none;
 }
 
 .title-screen__orbit-piece {
   position: absolute;
+  pointer-events: none;
 }
 
 .title-screen__orbit-icon {
@@ -409,6 +415,7 @@ canvas {
   position: relative;
   width: 5.3rem;
   height: 5.3rem;
+  filter: drop-shadow(0 10px 18px rgba(9, 4, 18, 0.3));
 }
 
 .moon-dialog__portrait--empty {
@@ -506,6 +513,7 @@ canvas {
 .final-overlay__badge-art {
   width: 2.4rem;
   height: 2.4rem;
+  filter: drop-shadow(0 8px 14px rgba(9, 4, 18, 0.25));
 }
 
 .final-overlay__title {

@@ -3,436 +3,241 @@
 import type { CSSProperties } from "react";
 import type { GirlPortraitState, GirlWorldState } from "@/lib/story-config";
 
-export type PixelArt = {
-  rows: string[];
-  palette: Record<string, string>;
-};
-
-export type WorldFacing = "down" | "up" | "left" | "right";
-
-type PixelArtSvgProps = {
-  art: PixelArt;
+type SpriteProps = {
   className?: string;
   scale?: number;
-  flipX?: boolean;
 };
 
-const heroPalette = {
-  o: "#1b1028",
-  h: "#f5d15c",
-  l: "#ffd97f",
-  s: "#f3c8a8",
-  j: "#4fb7ff",
-  p: "#2d57c8",
-  k: "#f6f4ff",
-};
-
-const heroDown: PixelArt = {
-  rows: [
-    "....oo....",
-    "...ohho...",
-    "..ohhhho..",
-    "..ohssho..",
-    "..ohssho..",
-    "...ojjo...",
-    "..ojjjjo..",
-    ".ojjppjjo.",
-    "..ojppjo..",
-    "..ok..ko..",
-    ".ok....ko.",
-    "..........",
-  ],
-  palette: heroPalette,
-};
-
-const heroUp: PixelArt = {
-  rows: [
-    "....oo....",
-    "...ohho...",
-    "..ohhhho..",
-    "..ohhhho..",
-    "..ohhhho..",
-    "...ojjo...",
-    "..ojjjjo..",
-    ".ojjppjjo.",
-    "..ojppjo..",
-    "..ok..ko..",
-    ".ok....ko.",
-    "..........",
-  ],
-  palette: heroPalette,
-};
-
-const heroSide: PixelArt = {
-  rows: [
-    "....oo....",
-    "...ohho...",
-    "..ohhhho..",
-    "..ohssho..",
-    "..ohssso..",
-    "...ojjoo..",
-    "..ojjjjo..",
-    "..ojppjjo.",
-    "...ojppjo.",
-    "...ok..ko.",
-    "..ok....o.",
-    "..........",
-  ],
-  palette: heroPalette,
-};
-
-const girlWorldRows = [
-  "....oooo....",
-  "...ohhhho...",
-  "..ohhhhhho..",
-  "..ohssssho..",
-  ".ohsggggsho.",
-  ".ohssmmssho.",
-  ".ohuuuuuuho.",
-  "..ouuuuuuoo.",
-  "..ouuuuuuoo.",
-  "..ok....ko..",
-  ".ok......ko.",
-  "..........",
-];
-
-const girlMoonwatchRows = [
-  ".....oooo...",
-  "....ohhhho..",
-  "...ohhhhhho.",
-  "...ohssssho.",
-  "..ohsggggsho",
-  "..ohssmmssho",
-  "...ohuuuuuho",
-  "....ouuuuoo.",
-  "....ouuuuoo.",
-  "....ok...koo",
-  "...ok.....ko",
-  "..........",
-];
-
-const girlWorldPalettes: Record<GirlWorldState, Record<string, string>> = {
-  distant: {
-    o: "#1c0f2b",
-    h: "#2f1650",
-    s: "#f0c5a7",
-    g: "#fff4dd",
-    m: "#ff78a2",
-    u: "#586fee",
-    k: "#f7f5ff",
-  },
-  soft: {
-    o: "#1b102b",
-    h: "#311851",
-    s: "#f1c7a9",
-    g: "#fff6df",
-    m: "#ff87aa",
-    u: "#5170ef",
-    k: "#f7f5ff",
-  },
-  smile: {
-    o: "#190f28",
-    h: "#341855",
-    s: "#f3c8ab",
-    g: "#fff7e4",
-    m: "#ff6ea6",
-    u: "#4d7aff",
-    k: "#fbf8ff",
-  },
-  radiant: {
-    o: "#160c27",
-    h: "#38185a",
-    s: "#f4ccaf",
-    g: "#fff9e6",
-    m: "#ff689f",
-    u: "#4f77ff",
-    k: "#fff9ff",
-  },
-  moonwatch: {
-    o: "#160c26",
-    h: "#32175b",
-    s: "#f3cbaf",
-    g: "#fff9ea",
-    m: "#ff7ea9",
-    u: "#5874eb",
-    k: "#fff9ff",
-  },
-};
-
-const portraitRows = [
-  "..................",
-  ".......oooo.......",
-  ".....oohhhhoo.....",
-  "....ohhhhhhhhho...",
-  "...ohhhhhhhhhhhho.",
-  "...ohhssssssshhho.",
-  "..ohhhssgggssshho.",
-  "..ehhhssbbbssgggo.",
-  "..ohhhssmmmmsssho.",
-  "..ohhhssgggggssho.",
-  "...ohhuuuuuuuuho..",
-  "..oouuuuuuuuuuoo..",
-  "..ouuuuuuuuuuuuoo.",
-  "..ouuuuuuuuuuuuoo.",
-  "...oo..oooooo..oo.",
-  "...oo..o....o..oo.",
-  "..................",
-];
-
-const portraitMoonwatchRows = [
-  "..................",
-  "........oooo......",
-  "......oohhhhoo....",
-  ".....ohhhhhhhhho..",
-  "....ohhhhhhhhhhho.",
-  "....ohhssssssshho.",
-  "....ohhssgggssggo.",
-  ".....ehhssbbbssho.",
-  "....oohssmmmmssho.",
-  "...oohssggggggsso.",
-  "...oohuuuuuuuuuho.",
-  "..oouuuuuuuuuuuuo.",
-  "..ouuuuuuuuuuuuuo.",
-  "...ouuuuuuuuuuuoo.",
-  "...oo..oooooo..oo.",
-  "....oo.o....o..oo.",
-  "..................",
-];
-
-const portraitPalettes: Record<GirlPortraitState, Record<string, string>> = {
+const portraitThemes: Record<
+  GirlPortraitState,
+  {
+    halo: string;
+    haloSoft: string;
+    hoodie: string;
+    hoodieShadow: string;
+    blush: string;
+    highlight: string;
+  }
+> = {
   icon: {
-    o: "#1d102d",
-    h: "#34175a",
-    s: "#f6caab",
-    b: "#8ea4ff",
-    g: "#fff9e7",
-    m: "#ff73a0",
-    u: "#5c78f3",
-    e: "#fff9ef",
+    halo: "#6f87ff",
+    haloSoft: "#8cf3ff",
+    hoodie: "#576cf4",
+    hoodieShadow: "#3046b3",
+    blush: "#ff7da8",
+    highlight: "#fff6c7",
   },
   soft: {
-    o: "#1b102b",
-    h: "#34175a",
-    s: "#f4c9aa",
-    b: "#92a5ff",
-    g: "#fff8e4",
-    m: "#ff7fa3",
-    u: "#5573f0",
-    e: "#fffaf0",
+    halo: "#7ea2ff",
+    haloSoft: "#8ef7ff",
+    hoodie: "#6074ff",
+    hoodieShadow: "#394eba",
+    blush: "#ff87ae",
+    highlight: "#fff7d4",
   },
   smile: {
-    o: "#190f28",
-    h: "#36175b",
-    s: "#f4caab",
-    b: "#9bafff",
-    g: "#fff9e8",
-    m: "#ff699d",
-    u: "#5573f4",
-    e: "#fffaf2",
+    halo: "#9c8fff",
+    haloSoft: "#ffd774",
+    hoodie: "#6480ff",
+    hoodieShadow: "#3d55bf",
+    blush: "#ff75a3",
+    highlight: "#fff3c4",
   },
   radiant: {
-    o: "#170c24",
-    h: "#39165f",
-    s: "#f6cfb0",
-    b: "#aab9ff",
-    g: "#fffbe9",
-    m: "#ff5f95",
-    u: "#5b7cff",
-    e: "#fffdf5",
+    halo: "#ffb768",
+    haloSoft: "#ffe27d",
+    hoodie: "#6887ff",
+    hoodieShadow: "#415cc7",
+    blush: "#ff6698",
+    highlight: "#fff0bc",
   },
   moonwatch: {
-    o: "#160c22",
-    h: "#341560",
-    s: "#f5cfb2",
-    b: "#b2bfff",
-    g: "#fffcef",
-    m: "#ff79a4",
-    u: "#6480f0",
-    e: "#fffef7",
+    halo: "#ffd47b",
+    haloSoft: "#fff0ad",
+    hoodie: "#6f8cff",
+    hoodieShadow: "#4761cd",
+    blush: "#ff78a7",
+    highlight: "#fff4ca",
   },
 };
 
-const moonFragmentArt: PixelArt = {
-  rows: [
-    "..mmmm..",
-    ".mmmmmm.",
-    "mmmmmcmm",
-    "mmmmmmmm",
-    "mmmmmmmm",
-    ".mmmcmm.",
-    "..mmmm..",
-    "........",
-  ],
-  palette: {
-    m: "#ffe8a0",
-    c: "#f9c35f",
+const worldThemes: Record<
+  GirlWorldState,
+  {
+    halo: string;
+    hoodie: string;
+    hoodieShadow: string;
+    blush: string;
+  }
+> = {
+  distant: {
+    halo: "#8af2ff",
+    hoodie: "#536ef0",
+    hoodieShadow: "#3149b1",
+    blush: "#ff88ae",
+  },
+  soft: {
+    halo: "#8ef6ff",
+    hoodie: "#6177ff",
+    hoodieShadow: "#4056c1",
+    blush: "#ff91b3",
+  },
+  smile: {
+    halo: "#ffd46d",
+    hoodie: "#6781ff",
+    hoodieShadow: "#435ec9",
+    blush: "#ff7aa6",
+  },
+  radiant: {
+    halo: "#ffd067",
+    hoodie: "#6d89ff",
+    hoodieShadow: "#4b65ce",
+    blush: "#ff6c9b",
+  },
+  moonwatch: {
+    halo: "#ffe396",
+    hoodie: "#7691ff",
+    hoodieShadow: "#4d67d3",
+    blush: "#ff79a4",
   },
 };
 
-function getGirlWorldArt(state: GirlWorldState) {
+function spriteTransform(scale = 1): CSSProperties {
   return {
-    rows: state === "moonwatch" ? girlMoonwatchRows : girlWorldRows,
-    palette: girlWorldPalettes[state],
+    transform: `scale(${scale})`,
+    transformOrigin: "center center",
   };
 }
 
-function getPortraitArt(state: GirlPortraitState) {
-  return {
-    rows: state === "moonwatch" ? portraitMoonwatchRows : portraitRows,
-    palette: portraitPalettes[state],
-  };
+function GirlFace({
+  hoodie,
+  hoodieShadow,
+  blush,
+  looking = "front",
+}: {
+  hoodie: string;
+  hoodieShadow: string;
+  blush: string;
+  looking?: "front" | "moon";
+}) {
+  const eyeX = looking === "moon" ? 62 : 47;
+  const eye2X = looking === "moon" ? 72 : 71;
+  const mouthX = looking === "moon" ? 62 : 58;
+
+  return (
+    <>
+      <path d="M26 92 C30 73 42 64 60 64 C79 64 91 74 94 92 L89 108 L31 108 Z" fill={hoodieShadow} />
+      <path d="M28 90 C33 75 43 69 60 69 C77 69 88 76 92 90 L87 112 L33 112 Z" fill={hoodie} />
+      <ellipse cx="60" cy="53" rx="25" ry="27" fill="#f5cfb1" />
+      <ellipse cx="60" cy="18" rx="32" ry="21" fill="#1a1028" />
+      <path d="M31 34 C33 17 44 7 61 7 C78 7 90 19 89 40 L83 36 C82 24 74 17 62 16 C49 16 41 22 39 36 Z" fill="#1a1028" />
+      <path d="M35 28 C37 14 46 9 55 10 C48 17 46 29 47 41 L36 42 Z" fill="#32165c" opacity="0.9" />
+      <rect x="32" y="42" width="10" height="38" rx="5" fill="#1a1028" />
+      <rect x="78" y="42" width="11" height="42" rx="5" fill="#1a1028" />
+      <ellipse cx={eyeX} cy="52" rx="3" ry="3.4" fill="#140b21" />
+      <ellipse cx={eye2X} cy="51" rx="2.8" ry="3.1" fill="#140b21" />
+      <ellipse cx="46" cy="61" rx="5.5" ry="3.2" fill={blush} opacity="0.22" />
+      <ellipse cx="77" cy="61" rx="5.5" ry="3.2" fill={blush} opacity="0.24" />
+      <path
+        d={looking === "moon" ? "M58 68 C62 71 66 71 70 68" : "M51 69 C56 74 63 74 69 69"}
+        stroke="#ff73a0"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <rect x={mouthX - 7} y="69" width="14" height="3.6" rx="1.8" fill="#fffaf6" />
+      <line x1={mouthX - 1} y1="69" x2={mouthX - 1} y2="72.6" stroke="#cad7ff" strokeWidth="1.2" />
+      <line x1={mouthX + 3} y1="69" x2={mouthX + 3} y2="72.6" stroke="#cad7ff" strokeWidth="1.2" />
+      <circle cx="86" cy="58" r="2.6" fill="#fff8dd" />
+      <circle cx="87" cy="59" r="1.2" fill="#d8e5ff" />
+    </>
+  );
 }
 
-export function PixelArtSvg({
-  art,
-  className,
-  scale = 1,
-  flipX = false,
-}: PixelArtSvgProps) {
-  const width = art.rows[0]?.length ?? 0;
-  const height = art.rows.length;
+export function GirlPortraitSprite({ state, className, scale = 1 }: { state: GirlPortraitState } & SpriteProps) {
+  const theme = portraitThemes[state];
+  const looking = state === "moonwatch" ? "moon" : "front";
 
   return (
     <svg
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox="0 0 120 120"
       className={className}
-      style={
-        {
-          transform: `scale(${flipX ? -scale : scale}, ${scale})`,
-          transformOrigin: "center center",
-        } as CSSProperties
-      }
+      style={spriteTransform(scale)}
       aria-hidden="true"
-      shapeRendering="crispEdges"
     >
-      {art.rows.flatMap((row, y) =>
-        row.split("").map((cell, x) => {
-          if (cell === ".") return null;
-          const fill = art.palette[cell];
-          if (!fill) return null;
-
-          return <rect key={`${x}-${y}-${cell}`} x={x} y={y} width="1" height="1" fill={fill} />;
-        }),
-      )}
+      <defs>
+        <radialGradient id={`portrait-halo-${state}`} cx="50%" cy="42%" r="58%">
+          <stop offset="0%" stopColor={theme.haloSoft} stopOpacity="0.95" />
+          <stop offset="54%" stopColor={theme.halo} stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#1c1030" stopOpacity="0.92" />
+        </radialGradient>
+      </defs>
+      <circle cx="60" cy="60" r="56" fill={`url(#portrait-halo-${state})`} />
+      <circle cx="60" cy="60" r="51" fill="rgba(24,12,42,0.38)" />
+      <circle cx="78" cy="35" r="15" fill={theme.highlight} opacity="0.28" />
+      <circle cx="31" cy="31" r="10" fill="#ffffff" opacity="0.08" />
+      <g transform={looking === "moon" ? "translate(1 -1)" : undefined}>
+        <GirlFace hoodie={theme.hoodie} hoodieShadow={theme.hoodieShadow} blush={theme.blush} looking={looking} />
+      </g>
     </svg>
   );
 }
 
-export function GirlPortraitSprite({
-  state,
-  className,
-  scale = 1,
-}: {
-  state: GirlPortraitState;
-  className?: string;
-  scale?: number;
-}) {
-  return <PixelArtSvg art={getPortraitArt(state)} className={className} scale={scale} />;
+export function GirlWorldSprite({ state, className, scale = 1 }: { state: GirlWorldState } & SpriteProps) {
+  const theme = worldThemes[state];
+  const looking = state === "moonwatch" ? "moon" : "front";
+
+  return (
+    <svg
+      viewBox="0 0 88 104"
+      className={className}
+      style={spriteTransform(scale)}
+      aria-hidden="true"
+    >
+      <ellipse cx="44" cy="89" rx="18" ry="7" fill="rgba(12,7,22,0.22)" />
+      <ellipse cx="44" cy="49" rx="26" ry="32" fill={theme.halo} opacity="0.18" />
+      <path d="M22 81 C25 62 34 56 44 56 C56 56 64 62 67 81 L61 99 L28 99 Z" fill={theme.hoodieShadow} />
+      <path d="M24 79 C27 63 35 59 44 59 C55 59 62 64 65 79 L59 100 L29 100 Z" fill={theme.hoodie} />
+      <ellipse cx="44" cy="39" rx="20" ry="22" fill="#f4ccaf" />
+      <ellipse cx="44" cy="15" rx="25" ry="16" fill="#190f28" />
+      <path d="M24 28 C27 13 35 7 46 7 C57 7 66 15 65 31 L59 28 C57 19 52 14 45 14 C36 14 30 20 28 30 Z" fill="#190f28" />
+      <rect x="23" y="31" width="8" height="29" rx="4" fill="#190f28" />
+      <rect x="57" y="32" width="8" height="32" rx="4" fill="#190f28" />
+      <ellipse cx={looking === "moon" ? 46 : 38} cy="39" rx="2.4" ry="2.7" fill="#140a21" />
+      <ellipse cx={looking === "moon" ? 54 : 50} cy="38" rx="2.2" ry="2.5" fill="#140a21" />
+      <path
+        d={looking === "moon" ? "M42 52 C45 55 49 55 52 52" : "M35 52 C39 56 45 56 50 52"}
+        stroke={theme.blush}
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <rect x={looking === "moon" ? 42 : 36} y="52" width="12" height="2.8" rx="1.4" fill="#fffaf6" />
+      <circle cx="64" cy="45" r="2" fill="#fff8dd" />
+    </svg>
+  );
 }
 
-export function GirlWorldSprite({
-  state,
-  className,
-  scale = 1,
-}: {
-  state: GirlWorldState;
-  className?: string;
-  scale?: number;
-}) {
-  return <PixelArtSvg art={getGirlWorldArt(state)} className={className} scale={scale} />;
-}
-
-export function MoonFragmentSprite({
-  className,
-  scale = 1,
-}: {
-  className?: string;
-  scale?: number;
-}) {
-  return <PixelArtSvg art={moonFragmentArt} className={className} scale={scale} />;
-}
-
-export function getHeroArt(facing: WorldFacing) {
-  if (facing === "left" || facing === "right") {
-    return heroSide;
-  }
-
-  if (facing === "up") {
-    return heroUp;
-  }
-
-  return heroDown;
-}
-
-export function drawPixelArt(
-  ctx: CanvasRenderingContext2D,
-  art: PixelArt,
-  x: number,
-  y: number,
-  scale: number,
-  options?: {
-    flipX?: boolean;
-    opacity?: number;
-  },
-) {
-  const { flipX = false, opacity = 1 } = options ?? {};
-  const width = art.rows[0]?.length ?? 0;
-  const height = art.rows.length;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalAlpha = opacity;
-  ctx.translate(Math.round(x), Math.round(y));
-
-  if (flipX) {
-    ctx.translate(width * scale, 0);
-    ctx.scale(-1, 1);
-  }
-
-  for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
-    const row = art.rows[rowIndex]!;
-
-    for (let colIndex = 0; colIndex < width; colIndex += 1) {
-      const cell = row[colIndex];
-      if (!cell || cell === ".") continue;
-      const fill = art.palette[cell];
-      if (!fill) continue;
-      ctx.fillStyle = fill;
-      ctx.fillRect(colIndex * scale, rowIndex * scale, scale, scale);
-    }
-  }
-
-  ctx.restore();
-}
-
-export function drawHeroSprite(
-  ctx: CanvasRenderingContext2D,
-  facing: WorldFacing,
-  x: number,
-  y: number,
-  scale: number,
-) {
-  const art = getHeroArt(facing);
-  drawPixelArt(ctx, art, x, y, scale, { flipX: facing === "left" });
-}
-
-export function drawGirlSprite(
-  ctx: CanvasRenderingContext2D,
-  state: GirlWorldState,
-  x: number,
-  y: number,
-  scale: number,
-) {
-  const art = getGirlWorldArt(state);
-  drawPixelArt(ctx, art, x, y, scale);
-}
-
-export function drawMoonFragment(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  opacity = 1,
-) {
-  drawPixelArt(ctx, moonFragmentArt, x, y, scale, { opacity });
+export function MoonFragmentSprite({ className, scale = 1 }: SpriteProps) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      className={className}
+      style={spriteTransform(scale)}
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="fragment-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fff0b0" />
+          <stop offset="100%" stopColor="#ffc95f" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M24 6 C31 8 38 15 39 23 C39 33 32 40 23 41 C14 40 8 33 8 24 C8 15 14 9 24 6 Z"
+        fill="url(#fragment-fill)"
+      />
+      <circle cx="30" cy="18" r="3.2" fill="#fff7de" opacity="0.7" />
+      <circle cx="20" cy="28" r="2.3" fill="#f7bd57" opacity="0.75" />
+    </svg>
+  );
 }
