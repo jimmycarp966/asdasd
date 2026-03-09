@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { Press_Start_2P, VT323 } from "next/font/google";
+import { Crimson_Text, Lora } from "next/font/google";
 import "./globals.css";
 
-const displayFont = Press_Start_2P({
-  variable: "--font-display",
+const serifFont = Crimson_Text({
+  variable: "--font-serif",
   subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "600"],
 });
 
-const uiFont = VT323({
-  variable: "--font-ui",
+const bodyFont = Lora({
+  variable: "--font-body",
   subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
   title: "La historia de la luna",
-  description: "Una aventura pixelada para el Dia de la Mujer.",
+  description: "Una noche mágica dedicada a ti.",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${displayFont.variable} ${uiFont.variable}`}>{children}</body>
+      <body className={`${serifFont.variable} ${bodyFont.variable}`}>{children}</body>
     </html>
   );
 }

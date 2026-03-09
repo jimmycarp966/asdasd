@@ -1,5 +1,5 @@
-import { RetroGameShell } from "@/components/retro-game-shell";
+import StoryContainer from "@/components/story-container";
 
 export default function Page() {
-  return <RetroGameShell />;
+  return <StoryContainer />;
 }
