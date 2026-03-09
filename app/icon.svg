@@ -1,0 +1,12 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="32" fill="#05060D"/>
+  <circle cx="80" cy="48" r="28" fill="url(#moon)" />
+  <path d="M30 98C42 82 58 74 78 74" stroke="#EFD5A7" stroke-width="7" stroke-linecap="round"/>
+  <defs>
+    <radialGradient id="moon" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(72 40) rotate(39.2894) scale(48.0208)">
+      <stop stop-color="#FFF8E7"/>
+      <stop offset="0.55" stop-color="#F2DEC0"/>
+      <stop offset="1" stop-color="#CDAF79"/>
+    </radialGradient>
+  </defs>
+</svg>
