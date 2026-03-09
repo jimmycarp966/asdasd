@@ -1,422 +1,596 @@
-export type GirlSpriteState =
-  | "silhouette"
-  | "distant"
-  | "partial"
-  | "smile"
-  | "radiant"
-  | "moonwatch";
+export type Point = {
+  x: number;
+  y: number;
+};
 
-export type HudState = "boot" | "hunt" | "close" | "rare" | "final";
+export type GirlPortraitState = "icon" | "soft" | "smile" | "radiant" | "moonwatch";
 
-export type StageCheckpoint = {
-  id: string;
-  progress: number;
-  eventType: "dialog" | "collectible" | "reveal" | "goal";
-  dialog: string;
-  spriteState: GirlSpriteState;
-  hudState: HudState;
+export type GirlWorldState = "distant" | "soft" | "smile" | "radiant" | "moonwatch";
+
+export type StageTheme = "rooftops" | "circuit" | "garden" | "observatory";
+
+export type TrackConfig = {
+  title: string;
+  artist: string;
+  videoId: string;
+  startSeconds: number;
+  endSeconds: number | null;
+  fallbackDurationSeconds: number;
 };
 
 export type StagePalette = {
   skyTop: string;
   skyBottom: string;
-  accent: string;
   moon: string;
-  platform: string;
-  neon: string;
-  haze: string;
+  moonGlow: string;
+  groundA: string;
+  groundB: string;
+  path: string;
+  accent: string;
+  accentSoft: string;
+  coral: string;
+  turquoise: string;
   ui: string;
+  shadow: string;
 };
 
-export type StageTheme = "rooftops" | "circuit" | "rare" | "final-run";
+export type DialogBeat = {
+  speaker: string;
+  title?: string;
+  lines: string[];
+  portrait?: GirlPortraitState;
+};
 
-export type StoryStage = {
+export type InteractableKind =
+  | "fragment"
+  | "telescope"
+  | "chimes"
+  | "sign"
+  | "mirror"
+  | "garland"
+  | "arcade"
+  | "pedestal"
+  | "bench"
+  | "fountain"
+  | "lantern"
+  | "arch"
+  | "plaque";
+
+export type StageInteractable = {
   id: string;
-  stageLabel: string;
+  kind: InteractableKind;
+  position: Point;
+  radius: number;
+  label: string;
+  grantsFragment: boolean;
+  dialog: DialogBeat;
+};
+
+export type StageGirlPresence = {
+  position: Point;
+  scale: number;
+  state: GirlWorldState;
+  appearAfterFragments: number;
+};
+
+export type StageExitDialog = DialogBeat & {
+  buttonLabel: string;
+};
+
+export type EndingMessage = {
+  title: string;
+  line: string;
+  subline: string;
+};
+
+export type GameStage = {
+  id: string;
+  label: string;
   stageTitle: string;
-  introBanner: string;
-  objective: string;
-  trackTitle: string;
-  artist: string;
-  videoId: string;
-  startSeconds: number;
-  endSeconds: number | null;
-  clipDurationSeconds: number;
-  exitUnlockAtProgress: number;
+  theme: StageTheme;
+  worldSize: {
+    width: number;
+    height: number;
+  };
+  spawn: Point;
+  exit: Point;
+  fragmentCount: number;
   palette: StagePalette;
-  backgroundTheme: StageTheme;
-  collectibleTarget: number;
-  hearts: number;
-  checkpoints: StageCheckpoint[];
+  track: TrackConfig;
+  introLine: string;
+  girlPresences: StageGirlPresence[];
+  interactables: StageInteractable[];
+  exitDialog: StageExitDialog;
 };
 
 export const storyTitle = "La historia de la luna";
-export const storyStartLabel = "PRESS START";
-export const storyStartHint = "La luna estaba esperando esta noche.";
-export const fadeDurationMs = 900;
-export const stageHoldLeadSeconds = 2.8;
+export const storyStartLabel = "Start";
+export const storyStartHint = "Una aventura chiquita para una luna enorme.";
+export const canvasSize = {
+  width: 320,
+  height: 240,
+};
+export const playerSpeed = 54;
+export const tapReachRadius = 20;
+export const interactionAutoRadius = 16;
+export const fadeDurationMs = 700;
+export const audioTargetVolume = 66;
 
-export const finalMessage = {
-  title: "FINAL",
+export const endingMessage: EndingMessage = {
+  title: "La luna tambien mira",
   line: "Como vos no hay ninguna, no brilla tanto la luna.",
   subline: "Feliz Dia de la Mujer.",
 };
 
-export const storyStages: StoryStage[] = [
+const sharedPalette = {
+  moon: "#f5e8a1",
+  moonGlow: "rgba(245, 232, 161, 0.34)",
+  ui: "#fff4d2",
+  shadow: "#12081f",
+};
+
+export const gameStages: GameStage[] = [
   {
     id: "moonrise",
-    stageLabel: "STAGE 1",
-    stageTitle: "Moonrise",
-    introBanner: "La ciudad se prende cuando ella aparece en pixeles.",
-    objective: "La noche se empieza a ordenar alrededor de su silueta.",
-    trackTitle: "Mujer Amante (version acustica)",
-    artist: "Rata Blanca",
-    videoId: "FiFsqQ92lR0",
-    startSeconds: 0,
-    endSeconds: 75,
-    clipDurationSeconds: 75,
-    exitUnlockAtProgress: 0.78,
+    label: "Fase 1",
+    stageTitle: "Moonrise Rooftops",
+    theme: "rooftops",
+    worldSize: { width: 520, height: 300 },
+    spawn: { x: 48, y: 196 },
+    exit: { x: 472, y: 154 },
+    fragmentCount: 4,
     palette: {
-      skyTop: "#08122f",
-      skyBottom: "#02050f",
-      accent: "#f0d37b",
-      moon: "#f8ecc4",
-      platform: "#182348",
-      neon: "#74b8ff",
-      haze: "#1a1640",
-      ui: "#f6e8b7",
+      ...sharedPalette,
+      skyTop: "#2533a7",
+      skyBottom: "#13082e",
+      groundA: "#2b1f59",
+      groundB: "#432e76",
+      path: "#66539d",
+      accent: "#ffd86f",
+      accentSoft: "#ffe7ab",
+      coral: "#ff7e9e",
+      turquoise: "#65f0ef",
     },
-    backgroundTheme: "rooftops",
-    collectibleTarget: 4,
-    hearts: 3,
-    checkpoints: [
+    track: {
+      title: "Mujer Amante (version acustica)",
+      artist: "Rata Blanca",
+      videoId: "FiFsqQ92lR0",
+      startSeconds: 0,
+      endSeconds: 75,
+      fallbackDurationSeconds: 75,
+    },
+    introLine: "La noche se prende en azoteas de colores mientras ella empieza a dibujarse en el cielo.",
+    girlPresences: [
+      { position: { x: 268, y: 116 }, scale: 1.1, state: "distant", appearAfterFragments: 0 },
+      { position: { x: 406, y: 108 }, scale: 1.28, state: "soft", appearAfterFragments: 2 },
+    ],
+    interactables: [
       {
-        id: "boot",
-        progress: 0.06,
-        eventType: "dialog",
-        dialog: "La noche arranca bajito, como si te estuviera nombrando.",
-        spriteState: "silhouette",
-        hudState: "boot",
+        id: "moonrise-telescope",
+        kind: "telescope",
+        position: { x: 102, y: 112 },
+        radius: 18,
+        label: "Telescopio",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Noche",
+          title: "La silueta aparece",
+          lines: [
+            "En la azotea mas lejana ya se adivina su figura.",
+            "Hasta la ciudad se queda quieta para verla mejor.",
+          ],
+          portrait: "soft",
+        },
       },
       {
-        id: "moon-piece-1",
-        progress: 0.16,
-        eventType: "collectible",
-        dialog: "El primer brillo cae justo donde empieza a aparecer.",
-        spriteState: "silhouette",
-        hudState: "hunt",
+        id: "moonrise-fragment-a",
+        kind: "fragment",
+        position: { x: 204, y: 176 },
+        radius: 16,
+        label: "Fragmento lunar",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Luna",
+          title: "Primer brillo",
+          lines: [
+            "La noche se empieza a ordenar alrededor de su silueta.",
+          ],
+          portrait: "soft",
+        },
       },
       {
-        id: "far-girl",
-        progress: 0.22,
-        eventType: "reveal",
-        dialog: "En la azotea mas lejana ya se adivina su figura.",
-        spriteState: "distant",
-        hudState: "hunt",
+        id: "moonrise-chimes",
+        kind: "chimes",
+        position: { x: 318, y: 144 },
+        radius: 18,
+        label: "Campanillas",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Noche",
+          title: "Todo acompana",
+          lines: [
+            "El viento aprende su ritmo sin hacer ruido.",
+            "Cada brillo nuevo parece inventado para ella.",
+          ],
+          portrait: "soft",
+        },
       },
       {
-        id: "moon-piece-2",
-        progress: 0.43,
-        eventType: "collectible",
-        dialog: "Hasta el barrio parece quedarse quieto para verla.",
-        spriteState: "distant",
-        hudState: "hunt",
-      },
-      {
-        id: "partial-reveal",
-        progress: 0.46,
-        eventType: "reveal",
-        dialog: "La sonrisa ya asoma entre la noche.",
-        spriteState: "partial",
-        hudState: "close",
-      },
-      {
-        id: "moon-piece-3",
-        progress: 0.68,
-        eventType: "collectible",
-        dialog: "La luna se va armando con su propia luz.",
-        spriteState: "partial",
-        hudState: "close",
-      },
-      {
-        id: "moon-piece-4",
-        progress: 0.82,
-        eventType: "collectible",
-        dialog: "Todo el cielo sabe que ella ya esta aca.",
-        spriteState: "partial",
-        hudState: "close",
-      },
-      {
-        id: "goal",
-        progress: 0.95,
-        eventType: "goal",
-        dialog: "El borde ya la esta mirando.",
-        spriteState: "partial",
-        hudState: "close",
+        id: "moonrise-sign",
+        kind: "sign",
+        position: { x: 408, y: 188 },
+        radius: 18,
+        label: "Cartel luminoso",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Noche",
+          title: "La luna toma forma",
+          lines: [
+            "La luna se va armando con la misma luz que deja al pasar.",
+          ],
+          portrait: "soft",
+        },
       },
     ],
+    exitDialog: {
+      speaker: "Noche",
+      title: "Moonrise completo",
+      lines: [
+        "Ya no es solo una figura lejana.",
+        "Ahora la noche sabe exactamente a quien estaba esperando.",
+      ],
+      portrait: "soft",
+      buttonLabel: "Seguir",
+    },
   },
   {
     id: "smile-circuit",
-    stageLabel: "STAGE 2",
+    label: "Fase 2",
     stageTitle: "Smile Circuit",
-    introBanner: "Las luces del mapa aprenden su sonrisa.",
-    objective: "El nivel entero cambia de color cuando ella aparece.",
-    trackTitle: "Princesa",
-    artist: "Las Pastillas del Abuelo",
-    videoId: "iPrxzdVdIZw",
-    startSeconds: 81,
-    endSeconds: 137,
-    clipDurationSeconds: 56,
-    exitUnlockAtProgress: 0.74,
+    theme: "circuit",
+    worldSize: { width: 520, height: 300 },
+    spawn: { x: 44, y: 188 },
+    exit: { x: 472, y: 122 },
+    fragmentCount: 4,
     palette: {
-      skyTop: "#120b2c",
-      skyBottom: "#050113",
-      accent: "#ffb76b",
-      moon: "#fde8b6",
-      platform: "#25154c",
-      neon: "#ff7b8b",
-      haze: "#3e1f6a",
-      ui: "#ffe9b8",
+      ...sharedPalette,
+      skyTop: "#5122b5",
+      skyBottom: "#1a083d",
+      groundA: "#2a1755",
+      groundB: "#4f237b",
+      path: "#734eab",
+      accent: "#ffc96d",
+      accentSoft: "#ffe6b4",
+      coral: "#ff6f9d",
+      turquoise: "#59f3ff",
     },
-    backgroundTheme: "circuit",
-    collectibleTarget: 4,
-    hearts: 3,
-    checkpoints: [
+    track: {
+      title: "Princesa",
+      artist: "Las Pastillas del Abuelo",
+      videoId: "iPrxzdVdIZw",
+      startSeconds: 81,
+      endSeconds: 137,
+      fallbackDurationSeconds: 56,
+    },
+    introLine: "Las luces del pasaje se acomodan como si supieran que su sonrisa esta por entrar en escena.",
+    girlPresences: [
+      { position: { x: 252, y: 116 }, scale: 1.18, state: "soft", appearAfterFragments: 0 },
+      { position: { x: 396, y: 96 }, scale: 1.34, state: "smile", appearAfterFragments: 2 },
+    ],
+    interactables: [
       {
-        id: "warmup",
-        progress: 0.08,
-        eventType: "dialog",
-        dialog: "Todo se vuelve mas tibio apenas entra en escena.",
-        spriteState: "partial",
-        hudState: "close",
+        id: "circuit-mirror",
+        kind: "mirror",
+        position: { x: 112, y: 104 },
+        radius: 18,
+        label: "Espejo de vitrina",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Pasaje",
+          title: "Reflejo nuevo",
+          lines: [
+            "Tenes esa forma de estar que vuelve todo mas lindo.",
+          ],
+          portrait: "smile",
+        },
       },
       {
-        id: "piece-1",
-        progress: 0.18,
-        eventType: "collectible",
-        dialog: "Las ventanas ya no brillan igual.",
-        spriteState: "partial",
-        hudState: "close",
+        id: "circuit-fragment-a",
+        kind: "fragment",
+        position: { x: 202, y: 188 },
+        radius: 16,
+        label: "Fragmento lunar",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Luces",
+          title: "La sonrisa entra",
+          lines: [
+            "Su sonrisa empieza a prender el mapa entero.",
+          ],
+          portrait: "smile",
+        },
       },
       {
-        id: "smile",
-        progress: 0.27,
-        eventType: "reveal",
-        dialog: "Su sonrisa toma el control del nivel.",
-        spriteState: "smile",
-        hudState: "close",
+        id: "circuit-garland",
+        kind: "garland",
+        position: { x: 314, y: 146 },
+        radius: 18,
+        label: "Guirnalda",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Pasaje",
+          title: "Todo responde",
+          lines: [
+            "Hasta los colores cambian de humor cuando ella se acerca.",
+            "Ni hablar de sus brackets: hacen juego con todas las luces.",
+          ],
+          portrait: "smile",
+        },
       },
       {
-        id: "piece-2",
-        progress: 0.46,
-        eventType: "collectible",
-        dialog: "Los carteles la siguen como si la conocieran.",
-        spriteState: "smile",
-        hudState: "close",
-      },
-      {
-        id: "brace-shine",
-        progress: 0.58,
-        eventType: "reveal",
-        dialog: "Hasta sus brackets hacen juego con las luces.",
-        spriteState: "smile",
-        hudState: "close",
-      },
-      {
-        id: "piece-3",
-        progress: 0.68,
-        eventType: "collectible",
-        dialog: "Cada paso suyo deja el aire un poco mejor.",
-        spriteState: "smile",
-        hudState: "close",
-      },
-      {
-        id: "piece-4",
-        progress: 0.82,
-        eventType: "collectible",
-        dialog: "La ciudad deja de ser fondo y se vuelve homenaje.",
-        spriteState: "radiant",
-        hudState: "rare",
-      },
-      {
-        id: "goal",
-        progress: 0.94,
-        eventType: "goal",
-        dialog: "El circuito entero late con ella.",
-        spriteState: "radiant",
-        hudState: "rare",
+        id: "circuit-arcade",
+        kind: "arcade",
+        position: { x: 408, y: 184 },
+        radius: 18,
+        label: "Cabina arcade",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Circuito",
+          title: "El nivel la sigue",
+          lines: [
+            "La ciudad deja de ser fondo y se vuelve homenaje.",
+          ],
+          portrait: "smile",
+        },
       },
     ],
+    exitDialog: {
+      speaker: "Circuito",
+      title: "Smile Circuit completo",
+      lines: [
+        "Ahora ya se la ve mas cerca: pelo, sonrisa, brillo, todo.",
+        "El nivel entero cambio de color y fue culpa suya.",
+      ],
+      portrait: "smile",
+      buttonLabel: "Seguir",
+    },
   },
   {
-    id: "rare-stage",
-    stageLabel: "STAGE 3",
-    stageTitle: "Rare Stage",
-    introBanner: "La noche entra en su version mas rara y mas linda.",
-    objective: "Ya no hace falta correr tanto: todo gira alrededor suyo.",
-    trackTitle: "Lo Mas Fino",
-    artist: "Las Pastillas del Abuelo",
-    videoId: "3xXkGhLPxKM",
-    startSeconds: 55,
-    endSeconds: 95,
-    clipDurationSeconds: 40,
-    exitUnlockAtProgress: 0.7,
+    id: "rare-garden",
+    label: "Fase 3",
+    stageTitle: "Rare Sky Garden",
+    theme: "garden",
+    worldSize: { width: 520, height: 300 },
+    spawn: { x: 48, y: 196 },
+    exit: { x: 470, y: 134 },
+    fragmentCount: 4,
     palette: {
-      skyTop: "#100722",
-      skyBottom: "#02010a",
-      accent: "#ffd26f",
-      moon: "#fff0c0",
-      platform: "#30184c",
-      neon: "#84f1ff",
-      haze: "#562286",
-      ui: "#f8f0bd",
+      ...sharedPalette,
+      skyTop: "#1d45c8",
+      skyBottom: "#10153c",
+      groundA: "#255e53",
+      groundB: "#367f6f",
+      path: "#6fb0a1",
+      accent: "#ffd15e",
+      accentSoft: "#ffebb1",
+      coral: "#ff7f8f",
+      turquoise: "#75f6ff",
     },
-    backgroundTheme: "rare",
-    collectibleTarget: 4,
-    hearts: 3,
-    checkpoints: [
+    track: {
+      title: "Lo Mas Fino",
+      artist: "Las Pastillas del Abuelo",
+      videoId: "3xXkGhLPxKM",
+      startSeconds: 55,
+      endSeconds: 95,
+      fallbackDurationSeconds: 40,
+    },
+    introLine: "El cielo se vuelve jardin y todo se siente mas raro, mas lindo y mas de ella.",
+    girlPresences: [
+      { position: { x: 250, y: 122 }, scale: 1.2, state: "smile", appearAfterFragments: 0 },
+      { position: { x: 392, y: 104 }, scale: 1.38, state: "radiant", appearAfterFragments: 2 },
+    ],
+    interactables: [
       {
-        id: "rare-boot",
-        progress: 0.08,
-        eventType: "dialog",
-        dialog: "Nada de esto se parece a nadie, como ella.",
-        spriteState: "smile",
-        hudState: "rare",
+        id: "garden-pedestal",
+        kind: "pedestal",
+        position: { x: 102, y: 112 },
+        radius: 18,
+        label: "Pedestal",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Constelacion",
+          title: "No se parece a nadie",
+          lines: [
+            "No sos solo hermosa, sos de esas personas que no se parecen a nadie.",
+          ],
+          portrait: "radiant",
+        },
       },
       {
-        id: "piece-1",
-        progress: 0.2,
-        eventType: "collectible",
-        dialog: "Otro fragmento cae donde ya habia luz.",
-        spriteState: "smile",
-        hudState: "rare",
+        id: "garden-fragment-a",
+        kind: "fragment",
+        position: { x: 204, y: 192 },
+        radius: 16,
+        label: "Fragmento lunar",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Cielo",
+          title: "Orbita propia",
+          lines: [
+            "Las constelaciones empiezan a copiarle la forma.",
+          ],
+          portrait: "radiant",
+        },
       },
       {
-        id: "rare-reveal",
-        progress: 0.28,
-        eventType: "reveal",
-        dialog: "Su presencia le gana al paisaje sin esfuerzo.",
-        spriteState: "radiant",
-        hudState: "rare",
+        id: "garden-bench",
+        kind: "bench",
+        position: { x: 316, y: 150 },
+        radius: 18,
+        label: "Banco",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Jardin",
+          title: "Todo gira",
+          lines: [
+            "Ya no estas cruzando un nivel.",
+            "Estas entrando en su orbita.",
+          ],
+          portrait: "radiant",
+        },
       },
       {
-        id: "piece-2",
-        progress: 0.48,
-        eventType: "collectible",
-        dialog: "Las constelaciones empiezan a copiarle la forma.",
-        spriteState: "radiant",
-        hudState: "rare",
-      },
-      {
-        id: "dialog-2",
-        progress: 0.61,
-        eventType: "dialog",
-        dialog: "Ya no estas cruzando un nivel: estas entrando en su orbita.",
-        spriteState: "radiant",
-        hudState: "rare",
-      },
-      {
-        id: "piece-3",
-        progress: 0.72,
-        eventType: "collectible",
-        dialog: "La luna casi completa le devuelve el brillo.",
-        spriteState: "radiant",
-        hudState: "rare",
-      },
-      {
-        id: "piece-4",
-        progress: 0.84,
-        eventType: "collectible",
-        dialog: "A esta altura hasta el cielo parece dedicado.",
-        spriteState: "radiant",
-        hudState: "rare",
-      },
-      {
-        id: "goal",
-        progress: 0.95,
-        eventType: "goal",
-        dialog: "El medidor lunar ya late entero.",
-        spriteState: "radiant",
-        hudState: "rare",
+        id: "garden-fountain",
+        kind: "fountain",
+        position: { x: 418, y: 194 },
+        radius: 18,
+        label: "Fuente",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Jardin",
+          title: "Version rara",
+          lines: [
+            "A esta altura hasta el cielo parece dedicado solo para ella.",
+          ],
+          portrait: "radiant",
+        },
       },
     ],
+    exitDialog: {
+      speaker: "Cielo",
+      title: "Rare Sky Garden completo",
+      lines: [
+        "La luna ya casi esta entera.",
+        "A esta altura el paisaje existe nada mas para devolverle un poco de lo que ella ilumina.",
+      ],
+      portrait: "radiant",
+      buttonLabel: "Seguir",
+    },
   },
   {
     id: "final-run",
-    stageLabel: "STAGE 4",
+    label: "Fase 4",
     stageTitle: "Final Run",
-    introBanner: "La ultima corrida termina lejos, mirandola.",
-    objective: "Vos llegas hasta el borde solo para verla con la luna.",
-    trackTitle: "La Vuelta al Mundo",
-    artist: "Calle 13",
-    videoId: "v_zZmsFZDaM",
-    startSeconds: 113,
-    endSeconds: null,
-    clipDurationSeconds: 78,
-    exitUnlockAtProgress: 0.58,
+    theme: "observatory",
+    worldSize: { width: 520, height: 300 },
+    spawn: { x: 40, y: 192 },
+    exit: { x: 458, y: 102 },
+    fragmentCount: 4,
     palette: {
-      skyTop: "#090a1e",
-      skyBottom: "#010105",
-      accent: "#f6d889",
-      moon: "#fff3c8",
-      platform: "#1a2042",
-      neon: "#93c9ff",
-      haze: "#203060",
-      ui: "#fff0b4",
+      ...sharedPalette,
+      skyTop: "#3d4ff0",
+      skyBottom: "#14143f",
+      groundA: "#3a2d78",
+      groundB: "#5b49a9",
+      path: "#9a88dd",
+      accent: "#ffd568",
+      accentSoft: "#fff0bf",
+      coral: "#ff7fae",
+      turquoise: "#7cf7ff",
     },
-    backgroundTheme: "final-run",
-    collectibleTarget: 3,
-    hearts: 3,
-    checkpoints: [
+    track: {
+      title: "La Vuelta al Mundo",
+      artist: "Calle 13",
+      videoId: "v_zZmsFZDaM",
+      startSeconds: 113,
+      endSeconds: null,
+      fallbackDurationSeconds: 78,
+    },
+    introLine: "El camino final sube hacia la luna completa, y vos solo queres llegar para mirarla.",
+    girlPresences: [
+      { position: { x: 310, y: 112 }, scale: 1.22, state: "radiant", appearAfterFragments: 0 },
+      { position: { x: 446, y: 86 }, scale: 1.48, state: "moonwatch", appearAfterFragments: 2 },
+    ],
+    interactables: [
       {
-        id: "final-boot",
-        progress: 0.1,
-        eventType: "dialog",
-        dialog: "La luna completa ya la esta esperando.",
-        spriteState: "radiant",
-        hudState: "final",
+        id: "final-lantern",
+        kind: "lantern",
+        position: { x: 112, y: 114 },
+        radius: 18,
+        label: "Farol",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Camino",
+          title: "La subida",
+          lines: [
+            "La luna completa ya la esta esperando.",
+          ],
+          portrait: "moonwatch",
+        },
       },
       {
-        id: "piece-1",
-        progress: 0.24,
-        eventType: "collectible",
-        dialog: "El silencio tambien sabe que ella es el centro.",
-        spriteState: "radiant",
-        hudState: "final",
+        id: "final-fragment-a",
+        kind: "fragment",
+        position: { x: 212, y: 188 },
+        radius: 16,
+        label: "Fragmento lunar",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Silencio",
+          title: "Todo se acomoda",
+          lines: [
+            "Todo alrededor se acomoda para ese momento.",
+          ],
+          portrait: "moonwatch",
+        },
       },
       {
-        id: "moonwatch-setup",
-        progress: 0.31,
-        eventType: "reveal",
-        dialog: "Ella se queda quieta. La luna tambien.",
-        spriteState: "moonwatch",
-        hudState: "final",
+        id: "final-arch",
+        kind: "arch",
+        position: { x: 316, y: 140 },
+        radius: 18,
+        label: "Arco",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Camino",
+          title: "Mirador",
+          lines: [
+            "Ella se queda quieta.",
+            "La luna tambien.",
+          ],
+          portrait: "moonwatch",
+        },
       },
       {
-        id: "piece-2",
-        progress: 0.52,
-        eventType: "collectible",
-        dialog: "Todo alrededor se acomoda para ese momento.",
-        spriteState: "moonwatch",
-        hudState: "final",
-      },
-      {
-        id: "piece-3",
-        progress: 0.66,
-        eventType: "collectible",
-        dialog: "Ya no queda nada por decir. Solo mirarla.",
-        spriteState: "moonwatch",
-        hudState: "final",
-      },
-      {
-        id: "goal",
-        progress: 0.92,
-        eventType: "goal",
-        dialog: "La noche ya encontro su imagen final.",
-        spriteState: "moonwatch",
-        hudState: "final",
+        id: "final-plaque",
+        kind: "plaque",
+        position: { x: 404, y: 188 },
+        radius: 18,
+        label: "Placa",
+        grantsFragment: true,
+        dialog: {
+          speaker: "Camino",
+          title: "Ya casi",
+          lines: [
+            "Ya no queda nada por decir. Solo mirarla.",
+          ],
+          portrait: "moonwatch",
+        },
       },
     ],
+    exitDialog: {
+      speaker: "Luna",
+      title: "Final Run completo",
+      lines: [
+        "La escena final ya esta lista.",
+      ],
+      portrait: "moonwatch",
+      buttonLabel: "Mirarla",
+    },
   },
 ];
+
+export const stageCount = gameStages.length;
+
+export function getStageProgress(stage: GameStage, interactedIds: string[]) {
+  const collected = stage.interactables.filter(
+    (item) => item.grantsFragment && interactedIds.includes(item.id),
+  ).length;
+
+  return {
+    collected,
+    remaining: Math.max(0, stage.fragmentCount - collected),
+    isComplete: collected >= stage.fragmentCount,
+  };
+}
+

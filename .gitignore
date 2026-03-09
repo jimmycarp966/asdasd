@@ -1,5 +1,8 @@
 .next/
 node_modules/
+output/
+dogfood-output/
+progress.md
 
 *.log
 npm-debug.log*

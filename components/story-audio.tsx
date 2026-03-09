@@ -2,9 +2,9 @@
 
 import { useEffect, useEffectEvent, useRef } from "react";
 import {
+  audioTargetVolume,
   fadeDurationMs,
-  stageHoldLeadSeconds,
-  storyStages,
+  gameStages,
 } from "@/lib/story-config";
 
 declare global {
@@ -16,6 +16,7 @@ declare global {
       ) => YTPlayer;
       PlayerState: {
         ENDED: number;
+        PLAYING: number;
       };
     };
     onYouTubeIframeAPIReady?: () => void;
@@ -28,208 +29,131 @@ type YTPlayer = {
   getDuration: () => number;
   getPlayerState: () => number;
   loadVideoById: (options: { videoId: string; startSeconds: number }) => void;
+  mute: () => void;
   pauseVideo: () => void;
   playVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   setVolume: (volume: number) => void;
+  unMute: () => void;
 };
 
 type StoryAudioProps = {
   activeStage: number;
   started: boolean;
+  muted: boolean;
   onAudioProgress: (progress: number) => void;
-  onCanAdvanceChange: (ready: boolean) => void;
   onFinalTrackEnded: (ended: boolean) => void;
 };
-
-const targetVolume = 64;
 
 function clamp(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-function buildEmbedSrc(videoId: string, startSeconds: number) {
-  if (typeof window === "undefined") {
-    return "about:blank";
-  }
-
-  const params = new URLSearchParams({
-    enablejsapi: "1",
-    controls: "0",
-    rel: "0",
-    autoplay: "0",
-    playsinline: "1",
-    origin: window.location.origin,
-    start: `${startSeconds}`,
-  });
-
-  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+function getStageDuration(stageIndex: number) {
+  const stage = gameStages[stageIndex]!;
+  return stage.track.endSeconds === null
+    ? stage.track.fallbackDurationSeconds
+    : Math.max(1, stage.track.endSeconds - stage.track.startSeconds);
 }
 
 export function StoryAudio({
   activeStage,
   started,
+  muted,
   onAudioProgress,
-  onCanAdvanceChange,
   onFinalTrackEnded,
 }: StoryAudioProps) {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const monitorRef = useRef<number | null>(null);
   const fadeRef = useRef<number | null>(null);
-  const readyRef = useRef(false);
-  const startedRef = useRef(started);
-  const stageRef = useRef(activeStage);
   const apiReadyRef = useRef(false);
-  const stageLoadAtRef = useRef(0);
-  const stageClockStartRef = useRef(0);
   const playerReadyRef = useRef(false);
-  const currentAudioStageRef = useRef(-1);
+  const currentStageRef = useRef(activeStage);
+  const startedRef = useRef(started);
+  const mutedRef = useRef(muted);
+  const stageClockStartRef = useRef(0);
+  const playerLoadAtRef = useRef(0);
+  const currentPlayerStageRef = useRef(-1);
 
   const clearMonitor = useEffectEvent(() => {
-    if (monitorRef.current) {
+    if (monitorRef.current !== null) {
       window.clearInterval(monitorRef.current);
       monitorRef.current = null;
     }
   });
 
   const clearFade = useEffectEvent(() => {
-    if (fadeRef.current) {
+    if (fadeRef.current !== null) {
       window.clearInterval(fadeRef.current);
       fadeRef.current = null;
     }
   });
 
-  const resetStageState = useEffectEvent((stageIndex: number) => {
-    stageRef.current = stageIndex;
-    stageClockStartRef.current = performance.now();
-    readyRef.current = false;
-    onAudioProgress(0);
-    onCanAdvanceChange(false);
-    onFinalTrackEnded(false);
-  });
+  const applyVolume = useEffectEvent((value: number) => {
+    const player = playerRef.current;
+    if (!player || !playerReadyRef.current) return;
 
-  const resetToIdle = useEffectEvent(() => {
-    onAudioProgress(0);
-    onCanAdvanceChange(false);
+    if (mutedRef.current) {
+      player.mute();
+      player.setVolume(0);
+      return;
+    }
+
+    player.unMute();
+    player.setVolume(value);
   });
 
   const fadeTo = useEffectEvent((from: number, to: number, onComplete?: () => void) => {
     clearFade();
     const player = playerRef.current;
-    if (!player) return;
+    if (!player || !playerReadyRef.current) {
+      onComplete?.();
+      return;
+    }
 
     let step = 0;
-    const steps = 18;
-    player.setVolume(from);
+    const totalSteps = 16;
+    applyVolume(from);
 
     fadeRef.current = window.setInterval(() => {
       step += 1;
-      const next = from + ((to - from) * step) / steps;
-      player.setVolume(next);
+      const nextVolume = from + ((to - from) * step) / totalSteps;
+      applyVolume(nextVolume);
 
-      if (step >= steps) {
+      if (step >= totalSteps) {
         clearFade();
-        player.setVolume(to);
+        applyVolume(to);
         onComplete?.();
       }
-    }, fadeDurationMs / steps);
-  });
-
-  const startMonitor = useEffectEvent((stageIndex: number) => {
-    clearMonitor();
-    const stage = storyStages[stageIndex];
-
-    monitorRef.current = window.setInterval(() => {
-      const player = playerRef.current;
-      const elapsedSeconds = Math.max(0, (performance.now() - stageClockStartRef.current) / 1000);
-      const fallbackProgress = clamp(elapsedSeconds / Math.max(1, stage.clipDurationSeconds));
-      let progress = fallbackProgress;
-      let audioCurrent = stage.startSeconds + elapsedSeconds;
-      let audioDuration = stage.endSeconds ?? stage.startSeconds + stage.clipDurationSeconds;
-
-      if (player && playerReadyRef.current) {
-        const current = player.getCurrentTime();
-        const elapsedSinceLoad = performance.now() - stageLoadAtRef.current;
-
-        if (
-          elapsedSinceLoad < 1800 &&
-          Math.abs(current - stage.startSeconds) > 4.5
-        ) {
-          player.seekTo(stage.startSeconds, true);
-          return;
-        }
-
-        const duration = stage.endSeconds ?? player.getDuration();
-        const length = Math.max(1, duration - stage.startSeconds);
-        const audioProgress = clamp((current - stage.startSeconds) / length);
-        progress = Math.max(fallbackProgress, audioProgress);
-        audioCurrent = current;
-        audioDuration = duration;
-      }
-
-      onAudioProgress(progress);
-
-      const unlockByProgress = progress >= stage.exitUnlockAtProgress;
-      const unlockByLead =
-        stage.endSeconds !== null &&
-        (
-          audioCurrent >= audioDuration - stageHoldLeadSeconds ||
-          progress >= 1 - stageHoldLeadSeconds / Math.max(1, stage.clipDurationSeconds)
-        );
-
-      if ((unlockByProgress || unlockByLead) && !readyRef.current) {
-        readyRef.current = true;
-        onCanAdvanceChange(true);
-      }
-
-      if (stage.endSeconds !== null && progress >= 1) {
-        player?.pauseVideo();
-        onAudioProgress(1);
-        readyRef.current = true;
-        onCanAdvanceChange(true);
-        clearMonitor();
-      }
-
-      if (
-        stage.endSeconds === null &&
-        (
-          progress >= 1 ||
-          (player &&
-            playerReadyRef.current &&
-            player.getPlayerState() === window.YT?.PlayerState.ENDED)
-        )
-      ) {
-        onAudioProgress(1);
-        onFinalTrackEnded(true);
-        clearMonitor();
-      }
-    }, 200);
+    }, fadeDurationMs / totalSteps);
   });
 
   const playStage = useEffectEvent((stageIndex: number, immediate = false) => {
     const player = playerRef.current;
-    const stage = storyStages[stageIndex];
     if (!player || !playerReadyRef.current) return;
 
+    const stage = gameStages[stageIndex]!;
+
     const loadAndPlay = () => {
-      stageLoadAtRef.current = performance.now();
+      playerLoadAtRef.current = performance.now();
+      currentPlayerStageRef.current = stageIndex;
       player.loadVideoById({
-        videoId: stage.videoId,
-        startSeconds: stage.startSeconds,
+        videoId: stage.track.videoId,
+        startSeconds: stage.track.startSeconds,
       });
-      player.setVolume(0);
-      currentAudioStageRef.current = stageIndex;
+      player.pauseVideo();
+      applyVolume(0);
 
       window.setTimeout(() => {
-        player.seekTo(stage.startSeconds, true);
+        player.seekTo(stage.track.startSeconds, true);
         player.playVideo();
       }, 120);
 
       window.setTimeout(() => {
-        player.seekTo(stage.startSeconds, true);
-        fadeTo(0, targetVolume);
-      }, 320);
+        player.seekTo(stage.track.startSeconds, true);
+        fadeTo(0, mutedRef.current ? 0 : audioTargetVolume);
+      }, 300);
     };
 
     if (immediate) {
@@ -237,7 +161,59 @@ export function StoryAudio({
       return;
     }
 
-    fadeTo(targetVolume, 0, loadAndPlay);
+    fadeTo(mutedRef.current ? 0 : audioTargetVolume, 0, loadAndPlay);
+  });
+
+  const startMonitor = useEffectEvent((stageIndex: number) => {
+    clearMonitor();
+    const stage = gameStages[stageIndex]!;
+    const duration = getStageDuration(stageIndex);
+
+    monitorRef.current = window.setInterval(() => {
+      const elapsedSeconds = Math.max(0, (performance.now() - stageClockStartRef.current) / 1000);
+      const fallbackProgress = clamp(elapsedSeconds / duration);
+      let progress = fallbackProgress;
+      const player = playerRef.current;
+
+      if (player && playerReadyRef.current && currentPlayerStageRef.current === stageIndex) {
+        const current = player.getCurrentTime();
+        const loadAge = performance.now() - playerLoadAtRef.current;
+        const endSeconds = stage.track.endSeconds;
+
+        if (loadAge > 1200 && Math.abs(current - stage.track.startSeconds) > 6 && current < stage.track.startSeconds) {
+          player.seekTo(stage.track.startSeconds, true);
+        } else {
+          const clipLength = Math.max(
+            1,
+            (endSeconds ?? stage.track.startSeconds + duration) - stage.track.startSeconds,
+          );
+          const playerProgress = clamp((current - stage.track.startSeconds) / clipLength);
+          progress = Math.max(fallbackProgress, playerProgress);
+
+          if (endSeconds !== null && current >= endSeconds - 0.15) {
+            player.pauseVideo();
+            progress = 1;
+          }
+
+          if (
+            endSeconds === null &&
+            player.getPlayerState() === window.YT?.PlayerState.ENDED
+          ) {
+            onFinalTrackEnded(true);
+            progress = 1;
+            clearMonitor();
+          }
+        }
+      } else if (stage.track.endSeconds === null && fallbackProgress >= 1) {
+        onFinalTrackEnded(true);
+      }
+
+      if (stage.track.endSeconds !== null && progress >= 1) {
+        clearMonitor();
+      }
+
+      onAudioProgress(progress);
+    }, 200);
   });
 
   useEffect(() => {
@@ -245,31 +221,45 @@ export function StoryAudio({
   }, [started]);
 
   useEffect(() => {
-    if (!started) {
-      clearMonitor();
-      resetToIdle();
-      return;
-    }
+    mutedRef.current = muted;
+    applyVolume(muted ? 0 : audioTargetVolume);
+  }, [applyVolume, muted]);
 
-    resetStageState(activeStage);
-    startMonitor(activeStage);
-  }, [activeStage, started]);
+  useEffect(() => {
+    currentStageRef.current = activeStage;
+    stageClockStartRef.current = performance.now();
+    onAudioProgress(0);
+    onFinalTrackEnded(false);
+
+    if (started) {
+      startMonitor(activeStage);
+    } else {
+      clearMonitor();
+    }
+  }, [activeStage, clearMonitor, onAudioProgress, onFinalTrackEnded, startMonitor, started]);
 
   useEffect(() => {
     const createPlayer = () => {
-      if (!iframeRef.current || playerRef.current || !window.YT?.Player) return;
+      if (!hostRef.current || playerRef.current || !window.YT?.Player) return;
 
-      iframeRef.current.src = buildEmbedSrc(
-        storyStages[0].videoId,
-        storyStages[0].startSeconds,
-      );
-
-      playerRef.current = new window.YT.Player(iframeRef.current, {
+      playerRef.current = new window.YT.Player(hostRef.current, {
+        host: "https://www.youtube-nocookie.com",
+        width: 1,
+        height: 1,
+        videoId: gameStages[0]!.track.videoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+          start: gameStages[0]!.track.startSeconds,
+        },
         events: {
           onReady: () => {
             playerReadyRef.current = true;
             if (startedRef.current) {
-              playStage(stageRef.current, true);
+              playStage(currentStageRef.current, true);
             }
           },
         },
@@ -297,29 +287,15 @@ export function StoryAudio({
       playerRef.current = null;
       playerReadyRef.current = false;
     };
-  }, []);
+  }, [clearFade, clearMonitor, playStage]);
 
   useEffect(() => {
-    if (
-      !started ||
-      !apiReadyRef.current ||
-      !playerRef.current ||
-      !playerReadyRef.current
-    ) {
-      return;
-    }
+    if (!started) return;
+    if (!apiReadyRef.current || !playerRef.current || !playerReadyRef.current) return;
 
-    playStage(activeStage, currentAudioStageRef.current < 0 || currentAudioStageRef.current === activeStage);
-  }, [activeStage, started]);
+    const immediate = currentPlayerStageRef.current < 0 || currentPlayerStageRef.current === activeStage;
+    playStage(activeStage, immediate);
+  }, [activeStage, playStage, started]);
 
-  return (
-    <iframe
-      ref={iframeRef}
-      className="story-audio-host"
-      title="Story audio"
-      aria-hidden="true"
-      tabIndex={-1}
-      allow="autoplay"
-    />
-  );
+  return <div ref={hostRef} className="story-audio-host" aria-hidden="true" />;
 }

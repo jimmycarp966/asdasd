@@ -1,321 +1,315 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DialogPortrait } from "@/components/dialog-portrait";
 import { FinalCutscene } from "@/components/final-cutscene";
-import { GirlSprite, HeartSprite, HeroSprite, MoonFragmentSprite } from "@/components/pixel-sprites";
-import { StageRenderer } from "@/components/stage-renderer";
+import { GirlPortraitSprite, MoonFragmentSprite } from "@/components/pixel-sprites";
+import {
+  type DialogBeat,
+  gameStages,
+  getStageProgress,
+  stageCount,
+  storyStartHint,
+  storyStartLabel,
+  storyTitle,
+} from "@/lib/story-config";
+import {
+  StageRenderer,
+  type StageRendererHandle,
+} from "@/components/stage-renderer";
 import { StoryAudio } from "@/components/story-audio";
-import { storyStages, storyStartHint, storyStartLabel, storyTitle, type StageCheckpoint } from "@/lib/story-config";
 
-type GameMode = "title" | "play" | "ending";
+declare global {
+  interface Window {
+    render_game_to_text?: () => string;
+    advanceTime?: (ms: number) => void;
+  }
+}
+
+type GameMode = "title" | "playing" | "cutscene";
+
+type ActiveDialog = {
+  beat: DialogBeat;
+  buttonLabel?: string;
+  kind: "interaction" | "exit";
+};
 
 function clamp(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-function getCheckpoint(stageIndex: number, motion: number) {
-  const stage = storyStages[stageIndex];
-  let current = stage.checkpoints[0];
-
-  for (const checkpoint of stage.checkpoints) {
-    if (motion >= checkpoint.progress) {
-      current = checkpoint;
-    }
-  }
-
-  return current;
-}
-
-function countCollected(checkpointList: StageCheckpoint[], motion: number) {
-  return checkpointList.filter(
-    (checkpoint) => checkpoint.eventType === "collectible" && checkpoint.progress <= motion,
-  ).length;
-}
-
-function passiveMotionForStage(stageIndex: number, audioProgress: number) {
-  const isLastStage = stageIndex === storyStages.length - 1;
-  const cap = isLastStage ? 0.84 : 0.72;
-  return Math.min(cap, audioProgress * 0.92);
-}
-
 export function RetroGameShell() {
   const [mode, setMode] = useState<GameMode>("title");
-  const [activeStage, setActiveStage] = useState(0);
-  const [stageProgress, setStageProgress] = useState(0);
+  const [activeStageIndex, setActiveStageIndex] = useState(0);
+  const [interactedIds, setInteractedIds] = useState<string[]>([]);
+  const [activeDialog, setActiveDialog] = useState<ActiveDialog | null>(null);
+  const [muted, setMuted] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [canAdvance, setCanAdvance] = useState(false);
   const [finalTrackEnded, setFinalTrackEnded] = useState(false);
+  const [cutsceneSeconds, setCutsceneSeconds] = useState(0);
 
-  const playfieldRef = useRef<HTMLElement | null>(null);
-  const activeStageRef = useRef(0);
-  const stageProgressRef = useRef(0);
-  const canAdvanceRef = useRef(false);
-  const modeRef = useRef<GameMode>("title");
-  const touchYRef = useRef<number | null>(null);
-  const moveStageRef = useRef<(direction: number, intensity?: number) => void>(() => {});
+  const canvasRef = useRef<StageRendererHandle | null>(null);
+  const cutsceneRafRef = useRef<number | null>(null);
+  const cutsceneLastFrameRef = useRef<number | null>(null);
 
-  const stage = storyStages[activeStage];
+  const stage = gameStages[activeStageIndex]!;
+  const stageProgress = useMemo(() => getStageProgress(stage, interactedIds), [interactedIds, stage]);
   const started = mode !== "title";
-  const stageMotion = clamp(
-    Math.max(stageProgress, passiveMotionForStage(activeStage, audioProgress)),
-  );
-  const currentCheckpoint = useMemo(
-    () => getCheckpoint(activeStage, stageMotion),
-    [activeStage, stageMotion],
-  );
-  const collectedCount = useMemo(
-    () => countCollected(stage.checkpoints, stageMotion),
-    [stage.checkpoints, stageMotion],
-  );
-  const stageNumberLabel = `${stage.stageLabel} / ${storyStages.length}`;
-
-  const moveStage = (direction: number, intensity = 1) => {
-    if (modeRef.current !== "play") return;
-
-    const isForward = direction > 0;
-    const step = clamp(intensity) * (isForward ? 0.12 : 0.1);
-    const currentStageIndex = activeStageRef.current;
-    const lockCeiling = canAdvanceRef.current ? 1 : 0.94;
-
-    if (isForward) {
-      if (canAdvanceRef.current && stageProgressRef.current >= 0.94) {
-        if (currentStageIndex < storyStages.length - 1) {
-          activeStageRef.current = currentStageIndex + 1;
-          stageProgressRef.current = 0;
-          setActiveStage(currentStageIndex + 1);
-          setStageProgress(0);
-          setAudioProgress(0);
-          return;
-        }
-
-        stageProgressRef.current = 1;
-        setStageProgress(1);
-        setMode("ending");
-        modeRef.current = "ending";
-        return;
-      }
-
-      const nextProgress = Math.min(lockCeiling, stageProgressRef.current + step);
-      if (nextProgress !== stageProgressRef.current) {
-        stageProgressRef.current = nextProgress;
-        setStageProgress(nextProgress);
-        return;
-      }
-
-      return;
-    }
-
-    const previousProgress = Math.max(0, stageProgressRef.current - step);
-    if (previousProgress !== stageProgressRef.current) {
-      stageProgressRef.current = previousProgress;
-      setStageProgress(previousProgress);
-      return;
-    }
-
-    if (currentStageIndex > 0) {
-      activeStageRef.current = currentStageIndex - 1;
-      stageProgressRef.current = 0.88;
-      setActiveStage(currentStageIndex - 1);
-      setStageProgress(0.88);
-    }
-  };
+  const dialogueOpen = activeDialog !== null;
+  const cutsceneReveal = clamp(Math.max(audioProgress, finalTrackEnded ? 1 : cutsceneSeconds / 5.5));
+  const stageLabel = `${stage.label} / ${stageCount}`;
+  const fragmentLabel = `${stageProgress.collected}/${stage.fragmentCount} fragmentos`;
 
   const startAdventure = () => {
-    setMode("play");
-    modeRef.current = "play";
-    setActiveStage(0);
-    setStageProgress(0);
+    setMode("playing");
+    setActiveStageIndex(0);
+    setInteractedIds([]);
+    setActiveDialog(null);
     setAudioProgress(0);
-    setCanAdvance(false);
     setFinalTrackEnded(false);
-    activeStageRef.current = 0;
-    stageProgressRef.current = 0;
-    canAdvanceRef.current = false;
+    setCutsceneSeconds(0);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (mode !== "play") return;
+  const handleInteract = (interactionId: string) => {
+    if (activeDialog) return;
+    const interaction = stage.interactables.find((item) => item.id === interactionId);
+    if (!interaction) return;
 
-    if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {
-      event.preventDefault();
-      moveStageRef.current(1, 0.9);
+    setInteractedIds((current) => {
+      if (current.includes(interactionId)) return current;
+      return [...current, interactionId];
+    });
+    setActiveDialog({
+      beat: interaction.dialog,
+      kind: "interaction",
+    });
+  };
+
+  const handleExit = () => {
+    if (activeDialog) return;
+    if (!stageProgress.isComplete) return;
+
+    setActiveDialog({
+      beat: stage.exitDialog,
+      buttonLabel: stage.exitDialog.buttonLabel,
+      kind: "exit",
+    });
+  };
+
+  const advanceStage = () => {
+    if (activeStageIndex >= gameStages.length - 1) {
+      setMode("cutscene");
+      setCutsceneSeconds(0);
+      setAudioProgress(0);
+      setFinalTrackEnded(false);
+      return;
     }
 
-    if (event.key === "ArrowUp" || event.key === "PageUp") {
-      event.preventDefault();
-      moveStageRef.current(-1, 0.9);
+    setActiveStageIndex((current) => current + 1);
+    setInteractedIds([]);
+    setActiveDialog(null);
+    setAudioProgress(0);
+    setFinalTrackEnded(false);
+  };
+
+  const continueDialog = () => {
+    if (!activeDialog) return;
+
+    if (activeDialog.kind === "exit") {
+      setActiveDialog(null);
+      advanceStage();
+      return;
     }
+
+    setActiveDialog(null);
   };
 
   useEffect(() => {
-    activeStageRef.current = activeStage;
-  }, [activeStage]);
-
-  useEffect(() => {
-    moveStageRef.current = moveStage;
-  });
-
-  useEffect(() => {
-    stageProgressRef.current = stageProgress;
-  }, [stageProgress]);
-
-  useEffect(() => {
-    canAdvanceRef.current = canAdvance;
-  }, [canAdvance]);
-
-  useEffect(() => {
-    modeRef.current = mode;
-    if (mode !== "title") {
-      playfieldRef.current?.focus();
+    if (mode !== "cutscene") {
+      if (cutsceneRafRef.current !== null) {
+        window.cancelAnimationFrame(cutsceneRafRef.current);
+        cutsceneRafRef.current = null;
+      }
+      cutsceneLastFrameRef.current = null;
+      return;
     }
-  }, [mode]);
 
-  useEffect(() => {
-    const node = playfieldRef.current;
-    if (!node || mode !== "play") return;
-
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      const intensity = Math.min(1.2, Math.abs(event.deltaY) / 260);
-      moveStageRef.current(event.deltaY > 0 ? 1 : -1, intensity);
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      touchYRef.current = event.touches[0]?.clientY ?? null;
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (touchYRef.current === null) return;
-      const currentY = event.touches[0]?.clientY ?? touchYRef.current;
-      const delta = touchYRef.current - currentY;
-
-      if (Math.abs(delta) < 12) return;
-
-      if (event.cancelable) {
-        event.preventDefault();
+    const tick = (timestamp: number) => {
+      if (cutsceneLastFrameRef.current === null) {
+        cutsceneLastFrameRef.current = timestamp;
       }
 
-      touchYRef.current = currentY;
-      moveStageRef.current(delta > 0 ? 1 : -1, Math.min(1.15, Math.abs(delta) / 110));
+      const delta = Math.min(32, timestamp - cutsceneLastFrameRef.current);
+      cutsceneLastFrameRef.current = timestamp;
+      setCutsceneSeconds((current) => current + delta / 1000);
+      canvasRef.current?.advanceTime(delta);
+      cutsceneRafRef.current = window.requestAnimationFrame(tick);
     };
 
-    const handleTouchEnd = () => {
-      touchYRef.current = null;
-    };
-
-    node.addEventListener("wheel", handleWheel, { passive: false });
-    node.addEventListener("touchstart", handleTouchStart, { passive: false });
-    node.addEventListener("touchmove", handleTouchMove, { passive: false });
-    node.addEventListener("touchend", handleTouchEnd);
+    cutsceneRafRef.current = window.requestAnimationFrame(tick);
 
     return () => {
-      node.removeEventListener("wheel", handleWheel);
-      node.removeEventListener("touchstart", handleTouchStart);
-      node.removeEventListener("touchmove", handleTouchMove);
-      node.removeEventListener("touchend", handleTouchEnd);
+      if (cutsceneRafRef.current !== null) {
+        window.cancelAnimationFrame(cutsceneRafRef.current);
+        cutsceneRafRef.current = null;
+      }
+      cutsceneLastFrameRef.current = null;
     };
   }, [mode]);
 
+  useEffect(() => {
+    window.render_game_to_text = () => {
+      const canvasState = canvasRef.current?.getSnapshot() ?? null;
+      const payload = {
+        mode,
+        stage: {
+          id: stage.id,
+          label: stage.label,
+          title: stage.stageTitle,
+        },
+        audioProgress: Number(audioProgress.toFixed(3)),
+        muted,
+        fragments: {
+          collected: stageProgress.collected,
+          total: stage.fragmentCount,
+          exitOpen: stageProgress.isComplete,
+        },
+        dialog: activeDialog
+          ? {
+              speaker: activeDialog.beat.speaker,
+              title: activeDialog.beat.title ?? null,
+              lines: activeDialog.beat.lines,
+            }
+          : null,
+        canvas: canvasState,
+      };
+
+      return JSON.stringify(payload);
+    };
+
+    window.advanceTime = (ms: number) => {
+      canvasRef.current?.advanceTime(ms);
+      if (mode === "cutscene") {
+        setCutsceneSeconds((current) => current + ms / 1000);
+      }
+    };
+
+    return () => {
+      delete window.render_game_to_text;
+      delete window.advanceTime;
+    };
+  }, [activeDialog, audioProgress, mode, muted, stage, stageProgress]);
+
   return (
-    <main className="retro-shell">
-      {started && (
+    <main className="moon-story-shell">
+      {started ? (
         <StoryAudio
-          activeStage={activeStage}
+          activeStage={activeStageIndex}
           started={started}
+          muted={muted}
           onAudioProgress={setAudioProgress}
-          onCanAdvanceChange={setCanAdvance}
           onFinalTrackEnded={setFinalTrackEnded}
         />
-      )}
+      ) : null}
 
-      {mode === "title" && (
-        <section className="retro-title">
-          <div className="retro-title__cabinet">
-            <div className="retro-title__topline">
-              <span>1UP</span>
-              <span>CREDIT 01</span>
+      {mode === "title" ? (
+        <section className="title-screen">
+          <div className="title-screen__frame">
+            <div className="title-screen__spark title-screen__spark--left" />
+            <div className="title-screen__spark title-screen__spark--right" />
+
+            <div className="title-screen__badge">
+              <div className="title-screen__badge-ring" />
+              <GirlPortraitSprite state="icon" className="title-screen__portrait" scale={1.8} />
             </div>
 
-            <div className="retro-title__screen">
-              <div className="retro-title__moon" />
-              <div className="retro-title__scanlines" />
-              <div className="retro-title__sprite retro-title__sprite--girl">
-                <GirlSprite state="moonwatch" scale={2.4} />
-              </div>
-              <div className="retro-title__sprite retro-title__sprite--hero">
-                <HeroSprite frame="stand" scale={1.8} />
-              </div>
-              <div className="retro-title__logo">
-                <span className="retro-title__tag">16-BIT LOVE QUEST</span>
-                <h1>{storyTitle}</h1>
-                <p>{storyStartHint}</p>
-              </div>
-              <div className="retro-title__meter">
-                <span>MOON</span>
-                <div className="retro-title__meter-pieces">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <MoonFragmentSprite key={`start-piece-${index}`} className="retro-title__meter-piece" />
-                  ))}
-                </div>
-              </div>
-              <button type="button" className="retro-title__start" onClick={startAdventure}>
-                {storyStartLabel}
-              </button>
+            <div className="title-screen__copy">
+              <span className="title-screen__eyebrow">Pixel moon quest</span>
+              <h1>{storyTitle}</h1>
+              <p>{storyStartHint}</p>
             </div>
+
+            <div className="title-screen__orbit">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <span key={`moon-piece-${index}`} className={`title-screen__orbit-piece orbit-${index + 1}`}>
+                  <MoonFragmentSprite className="title-screen__orbit-icon" scale={1.1} />
+                </span>
+              ))}
+            </div>
+
+            <button type="button" className="title-screen__start" onClick={startAdventure}>
+              {storyStartLabel}
+            </button>
           </div>
         </section>
-      )}
+      ) : (
+        <section className="game-shell">
+          <div className="game-shell__frame">
+            <header className="game-shell__hud">
+              <div className="game-shell__hud-block">
+                <span className="game-shell__eyebrow">{stageLabel}</span>
+                <strong>{stage.stageTitle}</strong>
+              </div>
 
-      {mode !== "title" && (
-        <section
-          ref={playfieldRef}
-          className={`retro-playfield ${mode === "ending" ? "is-ending" : ""}`}
-          onKeyDown={handleKeyDown}
-          tabIndex={0}
-        >
-          {mode === "play" && (
-            <>
-              <header className={`retro-hud hud-${currentCheckpoint.hudState}`}>
-                <div className="retro-hud__left">
-                  <span className="retro-hud__label">{stageNumberLabel}</span>
-                  <strong className="retro-hud__title">{stage.stageTitle}</strong>
-                </div>
-
-                <div className="retro-hud__meter">
-                  <span className="retro-hud__label">MOON</span>
-                  <div className="retro-hud__pieces">
-                    {Array.from({ length: stage.collectibleTarget }).map((_, index) => (
-                      <span
-                        key={`${stage.id}-hud-piece-${index}`}
-                        className={`retro-hud__piece ${index < collectedCount ? "is-on" : ""}`}
-                      >
-                        <MoonFragmentSprite className="retro-hud__piece-sprite" />
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="retro-hud__hearts">
-                  {Array.from({ length: stage.hearts }).map((_, index) => (
-                    <HeartSprite key={`${stage.id}-heart-${index}`} className="retro-hud__heart" />
+              <div className="game-shell__meter">
+                <span className="game-shell__eyebrow">Moon</span>
+                <div className="game-shell__fragments" aria-label={fragmentLabel}>
+                  {Array.from({ length: stage.fragmentCount }).map((_, index) => (
+                    <span
+                      key={`${stage.id}-fragment-${index}`}
+                      className={`game-shell__fragment ${index < stageProgress.collected ? "is-collected" : ""}`}
+                    >
+                      <MoonFragmentSprite className="game-shell__fragment-icon" scale={1.05} />
+                    </span>
                   ))}
                 </div>
-              </header>
+              </div>
 
+              <button
+                type="button"
+                className="game-shell__mute"
+                onClick={() => setMuted((current) => !current)}
+              >
+                {muted ? "Unmute" : "Mute"}
+              </button>
+            </header>
+
+            <div className="game-shell__canvas-wrap">
               <StageRenderer
+                ref={canvasRef}
                 stage={stage}
-                stageIndex={activeStage}
-                stageMotion={stageMotion}
-                collectedCount={collectedCount}
-                currentCheckpoint={currentCheckpoint}
-                canAdvance={canAdvance}
+                interactedIds={interactedIds}
+                dialogueOpen={dialogueOpen}
+                mode={mode === "cutscene" ? "cutscene" : "playing"}
+                cutsceneReveal={cutsceneReveal}
+                onInteract={handleInteract}
+                onExit={handleExit}
               />
-            </>
-          )}
 
-          {mode === "ending" && (
-            <FinalCutscene stage={stage} audioProgress={audioProgress} finalTrackEnded={finalTrackEnded} />
-          )}
+              {mode === "cutscene" ? (
+                <FinalCutscene reveal={cutsceneReveal} finalTrackEnded={finalTrackEnded} />
+              ) : null}
+            </div>
+
+            <footer className="game-shell__story-card">
+              <span className="game-shell__eyebrow">{stage.track.title}</span>
+              <p>{stage.introLine}</p>
+              <div className="game-shell__story-footer">
+                <span>{fragmentLabel}</span>
+                <span>{stageProgress.isComplete ? "Salida abierta" : "La luna sigue juntandose"}</span>
+              </div>
+            </footer>
+          </div>
+
+          {activeDialog ? (
+            <DialogPortrait
+              beat={activeDialog.beat}
+              stageLabel={stage.label}
+              fragmentLabel={fragmentLabel}
+              buttonLabel={activeDialog.buttonLabel}
+              onContinue={continueDialog}
+            />
+          ) : null}
         </section>
       )}
     </main>

@@ -1,490 +1,826 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import {
-  GirlSprite,
-  HeroSprite,
-  MoonFragmentSprite,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import {
+  canvasSize,
+  interactionAutoRadius,
+  type GameStage,
+  type Point,
+} from "@/lib/story-config";
+import {
+  drawGirlSprite,
+  drawHeroSprite,
+  drawMoonFragment,
+  type WorldFacing,
 } from "@/components/pixel-sprites";
-import type { StageCheckpoint, StoryStage, StageTheme } from "@/lib/story-config";
 
 type StageRendererProps = {
-  stage: StoryStage;
-  stageIndex: number;
-  stageMotion: number;
-  collectedCount: number;
-  currentCheckpoint: StageCheckpoint;
-  canAdvance: boolean;
+  stage: GameStage;
+  interactedIds: string[];
+  dialogueOpen: boolean;
+  mode: "playing" | "cutscene";
+  cutsceneReveal: number;
+  onInteract: (id: string) => void;
+  onExit: () => void;
 };
 
-type Platform = {
-  x: number;
-  y: number;
-  w: number;
-  h?: number;
-  glow?: boolean;
+type PendingAction =
+  | { type: "move" }
+  | { type: "exit" }
+  | null;
+
+export type GameCanvasSnapshot = {
+  mode: "playing" | "cutscene";
+  stageId: string;
+  coordinateSystem: "origin: top-left, x+: right, y+: down";
+  player: {
+    x: number;
+    y: number;
+    facing: WorldFacing;
+    targetX: number | null;
+    targetY: number | null;
+  };
+  fragmentsCollected: number;
+  fragmentsTotal: number;
+  exitOpen: boolean;
+  exit: Point;
+  visibleInteractions: Array<{
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+  }>;
 };
 
-type Building = {
-  x: number;
-  w: number;
-  h: number;
-  tone: "dark" | "mid" | "light";
+export type StageRendererHandle = {
+  advanceTime: (ms: number) => void;
+  getSnapshot: () => GameCanvasSnapshot;
 };
 
-type Sign = {
-  x: number;
-  y: number;
-  text: string;
-  style: "gold" | "pink" | "cyan";
-};
-
-type CollectibleSpot = {
-  x: number;
-  y: number;
-};
-
-type PresenceEcho = {
-  x: number;
-  y: number;
-  scale: number;
-  appearAt: number;
-  state: "silhouette" | "distant" | "partial" | "smile" | "radiant" | "moonwatch";
-};
-
-const starField = [
-  { top: "12%", left: "6%" },
-  { top: "18%", left: "18%" },
-  { top: "24%", left: "39%" },
-  { top: "16%", left: "58%" },
-  { top: "20%", left: "76%" },
-  { top: "28%", left: "92%" },
-  { top: "36%", left: "24%" },
-  { top: "42%", left: "12%" },
-  { top: "48%", left: "73%" },
-  { top: "58%", left: "52%" },
-  { top: "64%", left: "84%" },
-  { top: "70%", left: "17%" },
+const stars = [
+  { x: 42, y: 28, size: 2 },
+  { x: 82, y: 52, size: 2 },
+  { x: 128, y: 26, size: 3 },
+  { x: 182, y: 48, size: 2 },
+  { x: 238, y: 34, size: 2 },
+  { x: 276, y: 18, size: 3 },
+  { x: 302, y: 54, size: 2 },
 ];
 
-const platformsByTheme: Record<StageTheme, Platform[]> = {
-  rooftops: [
-    { x: 6, y: 16, w: 16 },
-    { x: 26, y: 28, w: 12 },
-    { x: 41, y: 20, w: 16, glow: true },
-    { x: 62, y: 33, w: 12 },
-    { x: 78, y: 24, w: 18 },
-    { x: 103, y: 36, w: 12 },
-    { x: 120, y: 22, w: 18 },
-    { x: 146, y: 31, w: 13, glow: true },
-  ],
-  circuit: [
-    { x: 8, y: 16, w: 18, glow: true },
-    { x: 31, y: 28, w: 12 },
-    { x: 48, y: 18, w: 18 },
-    { x: 73, y: 32, w: 14, glow: true },
-    { x: 92, y: 21, w: 18 },
-    { x: 118, y: 34, w: 12 },
-    { x: 136, y: 24, w: 16, glow: true },
-    { x: 158, y: 39, w: 10 },
-  ],
-  rare: [
-    { x: 6, y: 18, w: 16 },
-    { x: 27, y: 28, w: 14, glow: true },
-    { x: 47, y: 22, w: 14 },
-    { x: 66, y: 38, w: 16, glow: true },
-    { x: 88, y: 26, w: 14 },
-    { x: 108, y: 42, w: 14, glow: true },
-    { x: 128, y: 30, w: 17 },
-    { x: 151, y: 46, w: 12, glow: true },
-  ],
-  "final-run": [
-    { x: 6, y: 16, w: 20 },
-    { x: 32, y: 24, w: 14 },
-    { x: 51, y: 18, w: 18 },
-    { x: 75, y: 30, w: 14 },
-    { x: 94, y: 20, w: 16 },
-    { x: 116, y: 34, w: 13 },
-    { x: 135, y: 24, w: 19 },
-    { x: 160, y: 16, w: 14, glow: true },
-  ],
-};
-
-const buildingsByTheme: Record<StageTheme, Building[]> = {
-  rooftops: [
-    { x: 0, w: 13, h: 38, tone: "dark" },
-    { x: 14, w: 10, h: 52, tone: "mid" },
-    { x: 27, w: 13, h: 44, tone: "dark" },
-    { x: 44, w: 12, h: 57, tone: "mid" },
-    { x: 58, w: 11, h: 41, tone: "light" },
-    { x: 73, w: 12, h: 64, tone: "dark" },
-    { x: 88, w: 13, h: 48, tone: "mid" },
-    { x: 104, w: 12, h: 58, tone: "dark" },
-    { x: 121, w: 14, h: 44, tone: "mid" },
-    { x: 140, w: 12, h: 62, tone: "light" },
-    { x: 155, w: 13, h: 47, tone: "dark" },
-  ],
-  circuit: [
-    { x: 0, w: 14, h: 40, tone: "dark" },
-    { x: 17, w: 13, h: 57, tone: "light" },
-    { x: 33, w: 12, h: 48, tone: "mid" },
-    { x: 50, w: 13, h: 65, tone: "light" },
-    { x: 68, w: 11, h: 53, tone: "dark" },
-    { x: 84, w: 15, h: 70, tone: "light" },
-    { x: 103, w: 12, h: 46, tone: "mid" },
-    { x: 120, w: 14, h: 62, tone: "dark" },
-    { x: 139, w: 13, h: 55, tone: "light" },
-    { x: 156, w: 12, h: 68, tone: "mid" },
-  ],
-  rare: [
-    { x: 0, w: 14, h: 32, tone: "dark" },
-    { x: 18, w: 15, h: 45, tone: "mid" },
-    { x: 39, w: 12, h: 37, tone: "dark" },
-    { x: 56, w: 17, h: 54, tone: "light" },
-    { x: 79, w: 13, h: 41, tone: "mid" },
-    { x: 98, w: 15, h: 60, tone: "dark" },
-    { x: 120, w: 14, h: 48, tone: "light" },
-    { x: 141, w: 15, h: 66, tone: "mid" },
-  ],
-  "final-run": [
-    { x: 0, w: 18, h: 28, tone: "dark" },
-    { x: 24, w: 14, h: 42, tone: "mid" },
-    { x: 43, w: 15, h: 36, tone: "dark" },
-    { x: 64, w: 17, h: 55, tone: "light" },
-    { x: 86, w: 14, h: 40, tone: "dark" },
-    { x: 108, w: 16, h: 52, tone: "mid" },
-    { x: 130, w: 17, h: 44, tone: "dark" },
-    { x: 154, w: 16, h: 60, tone: "light" },
-  ],
-};
-
-const signsByTheme: Record<StageTheme, Sign[]> = {
-  rooftops: [
-    { x: 41, y: 41, text: "LUNA", style: "gold" },
-    { x: 102, y: 48, text: "JUMP", style: "cyan" },
-  ],
-  circuit: [
-    { x: 37, y: 44, text: "SMILE", style: "pink" },
-    { x: 92, y: 50, text: "PIXEL", style: "cyan" },
-    { x: 146, y: 46, text: "LOVE", style: "gold" },
-  ],
-  rare: [
-    { x: 30, y: 45, text: "RARE", style: "gold" },
-    { x: 87, y: 53, text: "UNICA", style: "pink" },
-    { x: 138, y: 57, text: "MOON", style: "cyan" },
-  ],
-  "final-run": [
-    { x: 52, y: 42, text: "FINAL", style: "gold" },
-    { x: 132, y: 54, text: "LOOK", style: "cyan" },
-  ],
-};
-
-const collectiblesByTheme: Record<StageTheme, CollectibleSpot[]> = {
-  rooftops: [
-    { x: 18, y: 42 },
-    { x: 52, y: 50 },
-    { x: 90, y: 44 },
-    { x: 150, y: 54 },
-  ],
-  circuit: [
-    { x: 22, y: 44 },
-    { x: 64, y: 52 },
-    { x: 109, y: 47 },
-    { x: 152, y: 58 },
-  ],
-  rare: [
-    { x: 19, y: 46 },
-    { x: 58, y: 54 },
-    { x: 103, y: 50 },
-    { x: 150, y: 61 },
-  ],
-  "final-run": [
-    { x: 34, y: 43 },
-    { x: 89, y: 50 },
-    { x: 145, y: 58 },
-  ],
-};
-
-const moonPieceAnchors = [
-  { x: "-16%", y: "14%" },
-  { x: "74%", y: "8%" },
-  { x: "68%", y: "70%" },
-  { x: "-10%", y: "62%" },
+const stageGlints = [
+  { x: 38, y: 120 },
+  { x: 94, y: 142 },
+  { x: 138, y: 174 },
+  { x: 198, y: 134 },
+  { x: 244, y: 162 },
+  { x: 294, y: 186 },
 ];
 
-const presenceEchoesByTheme: Record<StageTheme, PresenceEcho[]> = {
-  rooftops: [
-    { x: 53, y: 46, scale: 0.88, appearAt: 0.05, state: "silhouette" },
-    { x: 83, y: 39, scale: 1.04, appearAt: 0.22, state: "distant" },
-  ],
-  circuit: [
-    { x: 42, y: 44, scale: 0.96, appearAt: 0.06, state: "partial" },
-    { x: 91, y: 37, scale: 1.12, appearAt: 0.24, state: "smile" },
-  ],
-  rare: [
-    { x: 48, y: 46, scale: 1, appearAt: 0.08, state: "smile" },
-    { x: 102, y: 40, scale: 1.18, appearAt: 0.28, state: "radiant" },
-  ],
-  "final-run": [
-    { x: 112, y: 34, scale: 1.16, appearAt: 0.16, state: "moonwatch" },
-  ],
-};
-
-function clamp(value: number) {
-  return Math.max(0, Math.min(1, value));
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function stageStyle(stage: StoryStage): CSSProperties {
+function lerp(from: number, to: number, amount: number) {
+  return from + (to - from) * amount;
+}
+
+function distance(a: Point, b: Point) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function collectCount(stage: GameStage, interactedIds: string[]) {
+  return stage.interactables.filter(
+    (item) => item.grantsFragment && interactedIds.includes(item.id),
+  ).length;
+}
+
+function createInitialSnapshot(stage: GameStage, interactedIds: string[]): GameCanvasSnapshot {
   return {
-    ["--stage-sky-top" as string]: stage.palette.skyTop,
-    ["--stage-sky-bottom" as string]: stage.palette.skyBottom,
-    ["--stage-accent" as string]: stage.palette.accent,
-    ["--stage-moon" as string]: stage.palette.moon,
-    ["--stage-platform" as string]: stage.palette.platform,
-    ["--stage-neon" as string]: stage.palette.neon,
-    ["--stage-haze" as string]: stage.palette.haze,
-    ["--stage-ui" as string]: stage.palette.ui,
+    mode: "playing",
+    stageId: stage.id,
+    coordinateSystem: "origin: top-left, x+: right, y+: down",
+    player: {
+      x: stage.spawn.x,
+      y: stage.spawn.y,
+      facing: "right",
+      targetX: null,
+      targetY: null,
+    },
+    fragmentsCollected: collectCount(stage, interactedIds),
+    fragmentsTotal: stage.fragmentCount,
+    exitOpen: false,
+    exit: stage.exit,
+    visibleInteractions: stage.interactables.map((item) => ({
+      id: item.id,
+      label: item.label,
+      x: item.position.x,
+      y: item.position.y,
+    })),
   };
 }
 
-function heroFrameForMotion(stageMotion: number, canAdvance: boolean, theme: StageTheme) {
-  if (theme === "final-run" && canAdvance && stageMotion > 0.88) {
-    return "stand";
+function drawBackground(ctx: CanvasRenderingContext2D, stage: GameStage, animationMs: number) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvasSize.height);
+  gradient.addColorStop(0, stage.palette.skyTop);
+  gradient.addColorStop(1, stage.palette.skyBottom);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+  ctx.fillStyle = stage.palette.moonGlow;
+  ctx.fillRect(220, 18, 72, 72);
+  ctx.fillStyle = stage.palette.moon;
+  ctx.fillRect(234, 26, 44, 44);
+  ctx.clearRect(246, 32, 8, 6);
+  ctx.clearRect(262, 46, 5, 4);
+  ctx.clearRect(248, 56, 6, 5);
+
+  for (const star of stars) {
+    ctx.fillStyle = "#fef7de";
+    ctx.fillRect(star.x, star.y, star.size, star.size);
   }
 
-  if (Math.floor(stageMotion * 10) % 4 === 2) return "jump";
-  if (Math.floor(stageMotion * 16) % 2 === 0) return "run-a";
-  return "run-b";
-}
-
-function girlPlacement(theme: StageTheme, stageMotion: number) {
-  switch (theme) {
-    case "rooftops":
-      return {
-        left: `${74 + stageMotion * 16}%`,
-        bottom: `${34 + stageMotion * 10}%`,
-        scale: 1.35,
-        opacity: clamp((stageMotion - 0.2) / 0.28),
-      };
-    case "circuit":
-      return {
-        left: `${68 + stageMotion * 10}%`,
-        bottom: `${28 + stageMotion * 6}%`,
-        scale: 1.55,
-        opacity: clamp(0.55 + stageMotion * 0.55),
-      };
-    case "rare":
-      return {
-        left: `${78 + stageMotion * 6}%`,
-        bottom: `${31 + stageMotion * 7}%`,
-        scale: 1.72,
-        opacity: clamp(0.5 + stageMotion * 0.6),
-      };
-    case "final-run":
-      return {
-        left: "146%",
-        bottom: "33%",
-        scale: 1.7,
-        opacity: clamp(0.88 + stageMotion * 0.12),
-      };
+  for (const glint of stageGlints) {
+    const wobble = Math.sin(animationMs / 420 + glint.x) * 0.35 + 0.65;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.06 + wobble * 0.12})`;
+    ctx.fillRect(glint.x, glint.y, 2, 2);
   }
 }
 
-function farEchoOpacity(theme: StageTheme, stageMotion: number) {
-  if (theme === "rooftops") return clamp((stageMotion - 0.18) / 0.32);
-  if (theme === "circuit") return clamp(0.18 + stageMotion * 0.36);
-  if (theme === "rare") return clamp(0.1 + stageMotion * 0.3);
-  return 0;
+function drawRooftops(ctx: CanvasRenderingContext2D, stage: GameStage, camera: Point) {
+  ctx.fillStyle = stage.palette.groundB;
+  ctx.fillRect(0, 102, canvasSize.width, canvasSize.height - 102);
+
+  const roofs = [
+    { x: 8, y: 132, w: 108, h: 54, color: stage.palette.groundA },
+    { x: 128, y: 110, w: 126, h: 68, color: stage.palette.path },
+    { x: 274, y: 128, w: 90, h: 56, color: stage.palette.groundA },
+    { x: 376, y: 96, w: 112, h: 72, color: stage.palette.path },
+  ];
+
+  for (const roof of roofs) {
+    const screenX = roof.x - camera.x;
+    const screenY = roof.y - camera.y;
+    ctx.fillStyle = roof.color;
+    ctx.fillRect(screenX, screenY, roof.w, roof.h);
+    ctx.fillStyle = stage.palette.accentSoft;
+    ctx.fillRect(screenX, screenY, roof.w, 5);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    for (let offset = 0; offset < roof.w; offset += 14) {
+      ctx.fillRect(screenX + offset, screenY + 14, 4, roof.h - 22);
+    }
+  }
+
+  ctx.fillStyle = stage.palette.turquoise;
+  ctx.fillRect(70 - camera.x, 148 - camera.y, 18, 18);
+  ctx.fillRect(336 - camera.x, 134 - camera.y, 16, 16);
+  ctx.fillStyle = stage.palette.coral;
+  ctx.fillRect(168 - camera.x, 120 - camera.y, 22, 8);
 }
 
-export function StageRenderer({
-  stage,
-  stageMotion,
-  collectedCount,
-  currentCheckpoint,
-  canAdvance,
-}: StageRendererProps) {
-  const trackShift = 6 + stageMotion * 47;
-  const heroFrame = heroFrameForMotion(stageMotion, canAdvance, stage.backgroundTheme);
-  const heroLift = heroFrame === "jump" ? 16 : (Math.floor(stageMotion * 18) % 2) * 6;
-  const moonCompletion = collectedCount / Math.max(1, stage.collectibleTarget);
-  const girl = girlPlacement(stage.backgroundTheme, stageMotion);
-  const gateOpen = canAdvance && stageMotion > 0.86;
+function drawCircuit(ctx: CanvasRenderingContext2D, stage: GameStage, camera: Point, animationMs: number) {
+  ctx.fillStyle = stage.palette.groundA;
+  ctx.fillRect(0, 96, canvasSize.width, canvasSize.height - 96);
 
-  return (
-    <section
-      className={`retro-stage retro-stage--${stage.backgroundTheme}`}
-      style={stageStyle(stage)}
-      aria-label={`${stage.stageLabel} ${stage.stageTitle}`}
-    >
-      <div className="retro-stage__scanlines" />
-      <div className="retro-stage__noise" />
-      <div className="retro-stage__sky">
-        {starField.map((star, index) => (
-          <span
-            key={`${star.top}-${star.left}-${index}`}
-            className="retro-stage__star"
-            style={{
-              top: star.top,
-              left: star.left,
-              opacity: 0.34 + (index % 3) * 0.16 + moonCompletion * 0.1,
-            }}
-          />
-        ))}
-      </div>
+  for (let x = -16; x < canvasSize.width + 32; x += 20) {
+    ctx.fillStyle = x % 40 === 0 ? stage.palette.path : stage.palette.groundB;
+    ctx.fillRect(x, 116, 18, canvasSize.height - 116);
+  }
 
-      <div
-        className="retro-stage__moon-shell"
-        style={{
-          transform: `translate3d(${stageMotion * 3}%, ${-stageMotion * 2}%, 0) scale(${0.92 + moonCompletion * 0.2})`,
-        }}
-      >
-        <div
-          className="retro-stage__moon-core"
-          style={{
-            opacity: 0.28 + moonCompletion * 0.72,
-          }}
-        />
-        {moonPieceAnchors.slice(0, stage.collectibleTarget).map((piece, index) => {
-          const gathered = index < collectedCount;
-          return (
-            <span
-              key={`${piece.x}-${piece.y}-${index}`}
-              className={`retro-stage__moon-piece ${gathered ? "is-gathered" : ""}`}
-              style={
-                {
-                  ["--piece-x" as string]: piece.x,
-                  ["--piece-y" as string]: piece.y,
-                } as CSSProperties
-              }
-            >
-              <MoonFragmentSprite className="retro-stage__moon-piece-sprite" />
-            </span>
-          );
-        })}
-      </div>
+  const storefronts = [
+    { x: 18, y: 120, w: 88, h: 70, glow: stage.palette.coral },
+    { x: 134, y: 100, w: 98, h: 78, glow: stage.palette.turquoise },
+    { x: 268, y: 118, w: 90, h: 66, glow: stage.palette.accent },
+    { x: 386, y: 92, w: 108, h: 84, glow: stage.palette.coral },
+  ];
 
-      <div
-        className="retro-stage__track"
-        style={{ transform: `translate3d(-${trackShift}%, 0, 0)` }}
-      >
-        <div className="retro-stage__backdrop">
-          {buildingsByTheme[stage.backgroundTheme].map((building, index) => (
-            <span
-              key={`${building.x}-${building.w}-${index}`}
-              className={`retro-stage__building tone-${building.tone}`}
-              style={{
-                left: `${building.x}%`,
-                width: `${building.w}%`,
-                height: `${building.h}%`,
-              }}
-            />
-          ))}
-        </div>
+  for (const shop of storefronts) {
+    const screenX = shop.x - camera.x;
+    const screenY = shop.y - camera.y;
+    ctx.fillStyle = stage.palette.groundB;
+    ctx.fillRect(screenX, screenY, shop.w, shop.h);
+    ctx.fillStyle = shop.glow;
+    ctx.fillRect(screenX + 6, screenY + 6, shop.w - 12, 8);
+    const pulse = 0.35 + ((Math.sin(animationMs / 320 + shop.x) + 1) / 2) * 0.4;
+    ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+    for (let index = 0; index < 4; index += 1) {
+      ctx.fillRect(screenX + 12 + index * 18, screenY + 18, 8, 22);
+    }
+  }
 
-        <div className={`retro-stage__parallax retro-stage__parallax--${stage.backgroundTheme}`} />
+  ctx.fillStyle = stage.palette.turquoise;
+  ctx.fillRect(102 - camera.x, 196 - camera.y, 86, 3);
+  ctx.fillStyle = stage.palette.coral;
+  ctx.fillRect(238 - camera.x, 196 - camera.y, 82, 3);
+}
 
-        {platformsByTheme[stage.backgroundTheme].map((platform, index) => (
-          <span
-            key={`${platform.x}-${platform.y}-${index}`}
-            className={`retro-stage__platform ${platform.glow ? "is-glow" : ""}`}
-            style={{
-              left: `${platform.x}%`,
-              bottom: `${platform.y}%`,
-              width: `${platform.w}%`,
-              height: `${platform.h ?? 5}%`,
-            }}
-          />
-        ))}
+function drawGarden(ctx: CanvasRenderingContext2D, stage: GameStage, camera: Point, animationMs: number) {
+  ctx.fillStyle = stage.palette.groundA;
+  ctx.fillRect(0, 92, canvasSize.width, canvasSize.height - 92);
 
-        {signsByTheme[stage.backgroundTheme].map((sign, index) => (
-          <span
-            key={`${sign.text}-${index}`}
-            className={`retro-stage__sign sign-${sign.style}`}
-            style={{
-              left: `${sign.x}%`,
-              bottom: `${sign.y}%`,
-            }}
-          >
-            {sign.text}
-          </span>
-        ))}
+  for (let y = 102; y < canvasSize.height + 18; y += 18) {
+    for (let x = 0; x < canvasSize.width + 18; x += 18) {
+      ctx.fillStyle = (x + y) % 36 === 0 ? stage.palette.groundB : stage.palette.groundA;
+      ctx.fillRect(x, y, 18, 18);
+    }
+  }
 
-        {collectiblesByTheme[stage.backgroundTheme]
-          .slice(0, stage.collectibleTarget)
-          .map((spot, index) => (
-            <span
-              key={`${spot.x}-${spot.y}-${index}`}
-              className={`retro-stage__collectible ${index < collectedCount ? "is-collected" : ""}`}
-              style={{
-                left: `${spot.x}%`,
-                bottom: `${spot.y}%`,
-              }}
-            >
-              <MoonFragmentSprite className="retro-stage__collectible-sprite" />
-            </span>
-          ))}
+  const paths = [
+    { x: 14, y: 152, w: 118, h: 26 },
+    { x: 136, y: 120, w: 112, h: 30 },
+    { x: 252, y: 152, w: 112, h: 24 },
+    { x: 374, y: 120, w: 112, h: 32 },
+  ];
 
-        {presenceEchoesByTheme[stage.backgroundTheme].map((echo, index) => (
-          <span
-            key={`presence-${stage.backgroundTheme}-${index}`}
-            className="retro-stage__presence"
-            style={{
-              left: `${echo.x}%`,
-              bottom: `${echo.y}%`,
-              opacity: clamp((stageMotion - echo.appearAt) / 0.22) * (0.46 + index * 0.14),
-            }}
-          >
-            <GirlSprite
-              state={echo.state}
-              className="retro-stage__sprite retro-stage__sprite--presence"
-              scale={echo.scale}
-            />
-          </span>
-        ))}
+  ctx.fillStyle = stage.palette.path;
+  for (const path of paths) {
+    ctx.fillRect(path.x - camera.x, path.y - camera.y, path.w, path.h);
+  }
 
-        <span
-          className="retro-stage__girl-echo"
-          style={{
-            left: `${girl.left}`,
-            bottom: `${parseFloat(girl.bottom) + 11}%`,
-            opacity: farEchoOpacity(stage.backgroundTheme, stageMotion),
-          }}
-        >
-          <GirlSprite state="silhouette" className="retro-stage__sprite retro-stage__sprite--echo" />
-        </span>
+  ctx.fillStyle = stage.palette.turquoise;
+  const pondX = 320 - camera.x;
+  const pondY = 182 - camera.y;
+  ctx.fillRect(pondX, pondY, 58, 24);
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.fillRect(pondX + 8, pondY + 5, 22, 3);
+  ctx.fillStyle = stage.palette.accent;
+  ctx.fillRect(154 - camera.x, 144 - camera.y, 10, 10);
+  ctx.fillRect(432 - camera.x, 130 - camera.y, 10, 10);
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.18 + (Math.sin(animationMs / 380) + 1) * 0.1})`;
+  ctx.fillRect(72 - camera.x, 118 - camera.y, 24, 4);
+}
 
-        <span
-          className="retro-stage__girl"
-          style={{
-            left: girl.left,
-            bottom: girl.bottom,
-            opacity: girl.opacity,
-          }}
-        >
-          <GirlSprite
-            state={currentCheckpoint.spriteState}
-            className="retro-stage__sprite retro-stage__sprite--girl"
-            scale={girl.scale}
-          />
-        </span>
+function drawObservatory(ctx: CanvasRenderingContext2D, stage: GameStage, camera: Point, animationMs: number) {
+  ctx.fillStyle = stage.palette.groundB;
+  ctx.fillRect(0, 98, canvasSize.width, canvasSize.height - 98);
 
-        <span className={`retro-stage__gate ${gateOpen ? "is-open" : ""}`}>
-          <span className="retro-stage__gate-label">
-            {gateOpen ? "GOAL OPEN" : "LOCKED"}
-          </span>
-        </span>
-      </div>
+  const terraces = [
+    { x: 8, y: 170, w: 110, h: 34 },
+    { x: 132, y: 144, w: 110, h: 30 },
+    { x: 258, y: 118, w: 110, h: 28 },
+    { x: 380, y: 92, w: 112, h: 34 },
+  ];
 
-      <div
-        className={`retro-stage__hero ${gateOpen ? "is-ready" : ""}`}
-        style={{
-          transform: `translate3d(0, -${heroLift}px, 0)`,
-        }}
-      >
-        <HeroSprite className="retro-stage__sprite retro-stage__sprite--hero" frame={heroFrame} scale={1.8} />
-      </div>
+  for (const terrace of terraces) {
+    const screenX = terrace.x - camera.x;
+    const screenY = terrace.y - camera.y;
+    ctx.fillStyle = stage.palette.path;
+    ctx.fillRect(screenX, screenY, terrace.w, terrace.h);
+    ctx.fillStyle = stage.palette.accentSoft;
+    ctx.fillRect(screenX, screenY, terrace.w, 4);
+  }
 
-    </section>
+  ctx.fillStyle = stage.palette.groundA;
+  ctx.fillRect(402 - camera.x, 60 - camera.y, 72, 48);
+  ctx.fillStyle = stage.palette.turquoise;
+  ctx.fillRect(422 - camera.x, 68 - camera.y, 32, 18);
+  ctx.fillStyle = `rgba(255,255,255,${0.14 + (Math.sin(animationMs / 420) + 1) * 0.08})`;
+  ctx.fillRect(414 - camera.x, 144 - camera.y, 46, 3);
+  ctx.fillStyle = stage.palette.accent;
+  ctx.fillRect(88 - camera.x, 178 - camera.y, 16, 16);
+}
+
+function drawInteractable(
+  ctx: CanvasRenderingContext2D,
+  stage: GameStage,
+  kind: StageRendererProps["stage"]["interactables"][number]["kind"],
+  position: Point,
+  highlighted: boolean,
+  animationMs: number,
+) {
+  const pulse = highlighted ? 1 : 0.7 + (Math.sin(animationMs / 260 + position.x) + 1) * 0.15;
+  const glowColor = highlighted ? stage.palette.accentSoft : stage.palette.turquoise;
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.12 + pulse * 0.14})`;
+  ctx.fillRect(position.x - 10, position.y + 8, 20, 4);
+  ctx.fillStyle = glowColor;
+
+  switch (kind) {
+    case "fragment":
+      drawMoonFragment(ctx, position.x - 8, position.y - 12, 2, pulse);
+      break;
+    case "telescope":
+      ctx.fillRect(position.x - 3, position.y - 12, 6, 8);
+      ctx.fillStyle = stage.palette.coral;
+      ctx.fillRect(position.x + 2, position.y - 16, 8, 5);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 8, position.y + 1, 3, 8);
+      ctx.fillRect(position.x, position.y + 3, 3, 6);
+      ctx.fillRect(position.x + 8, position.y + 1, 3, 8);
+      break;
+    case "chimes":
+      ctx.fillRect(position.x - 10, position.y - 16, 20, 4);
+      ctx.fillStyle = stage.palette.accent;
+      ctx.fillRect(position.x - 8, position.y - 12, 2, 12);
+      ctx.fillRect(position.x - 2, position.y - 10, 2, 10);
+      ctx.fillRect(position.x + 4, position.y - 12, 2, 12);
+      break;
+    case "sign":
+      ctx.fillRect(position.x - 12, position.y - 14, 24, 12);
+      ctx.fillStyle = stage.palette.shadow;
+      ctx.fillRect(position.x - 9, position.y - 11, 18, 6);
+      ctx.fillStyle = stage.palette.coral;
+      ctx.fillRect(position.x - 2, position.y - 1, 4, 10);
+      break;
+    case "mirror":
+      ctx.fillRect(position.x - 7, position.y - 16, 14, 18);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 4, position.y - 12, 8, 10);
+      ctx.fillStyle = stage.palette.coral;
+      ctx.fillRect(position.x - 2, position.y + 2, 4, 8);
+      break;
+    case "garland":
+      ctx.fillRect(position.x - 12, position.y - 16, 24, 3);
+      ctx.fillStyle = stage.palette.coral;
+      ctx.fillRect(position.x - 9, position.y - 11, 4, 4);
+      ctx.fillStyle = stage.palette.accent;
+      ctx.fillRect(position.x - 2, position.y - 8, 4, 4);
+      ctx.fillStyle = stage.palette.turquoise;
+      ctx.fillRect(position.x + 5, position.y - 12, 4, 4);
+      break;
+    case "arcade":
+      ctx.fillRect(position.x - 10, position.y - 16, 20, 24);
+      ctx.fillStyle = stage.palette.shadow;
+      ctx.fillRect(position.x - 6, position.y - 12, 12, 8);
+      ctx.fillStyle = stage.palette.coral;
+      ctx.fillRect(position.x - 4, position.y, 8, 3);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 2, position.y + 6, 4, 2);
+      break;
+    case "pedestal":
+      ctx.fillRect(position.x - 10, position.y - 8, 20, 12);
+      ctx.fillStyle = stage.palette.accent;
+      ctx.fillRect(position.x - 4, position.y - 16, 8, 8);
+      break;
+    case "bench":
+      ctx.fillRect(position.x - 12, position.y - 8, 24, 6);
+      ctx.fillRect(position.x - 8, position.y - 14, 16, 3);
+      ctx.fillStyle = stage.palette.shadow;
+      ctx.fillRect(position.x - 8, position.y - 2, 3, 8);
+      ctx.fillRect(position.x + 5, position.y - 2, 3, 8);
+      break;
+    case "fountain":
+      ctx.fillRect(position.x - 12, position.y - 10, 24, 16);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 6, position.y - 18, 12, 8);
+      ctx.fillStyle = stage.palette.turquoise;
+      ctx.fillRect(position.x - 4, position.y - 14, 8, 4);
+      break;
+    case "lantern":
+      ctx.fillRect(position.x - 2, position.y - 18, 4, 24);
+      ctx.fillStyle = stage.palette.accent;
+      ctx.fillRect(position.x - 7, position.y - 24, 14, 8);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 4, position.y - 21, 8, 3);
+      break;
+    case "arch":
+      ctx.fillRect(position.x - 14, position.y - 16, 6, 24);
+      ctx.fillRect(position.x + 8, position.y - 16, 6, 24);
+      ctx.fillRect(position.x - 8, position.y - 20, 16, 6);
+      break;
+    case "plaque":
+      ctx.fillRect(position.x - 11, position.y - 12, 22, 14);
+      ctx.fillStyle = stage.palette.shadow;
+      ctx.fillRect(position.x - 7, position.y - 8, 14, 6);
+      ctx.fillStyle = stage.palette.accentSoft;
+      ctx.fillRect(position.x - 2, position.y + 2, 4, 6);
+      break;
+  }
+}
+
+function drawExit(
+  ctx: CanvasRenderingContext2D,
+  stage: GameStage,
+  camera: Point,
+  exitOpen: boolean,
+  animationMs: number,
+) {
+  const x = stage.exit.x - camera.x - 18;
+  const y = stage.exit.y - camera.y - 28;
+  const pulse = 0.4 + (Math.sin(animationMs / 260) + 1) * 0.2;
+
+  ctx.fillStyle = exitOpen ? stage.palette.accent : stage.palette.shadow;
+  ctx.fillRect(x, y + 10, 36, 28);
+  ctx.fillRect(x + 6, y, 24, 10);
+
+  if (exitOpen) {
+    ctx.fillStyle = `rgba(255, 242, 186, ${0.14 + pulse * 0.2})`;
+    ctx.fillRect(x - 8, y - 8, 52, 52);
+    ctx.fillStyle = stage.palette.accentSoft;
+    ctx.fillRect(x + 10, y + 14, 16, 14);
+  } else {
+    ctx.fillStyle = stage.palette.groundB;
+    ctx.fillRect(x + 10, y + 14, 16, 14);
+  }
+}
+
+function drawPlayerShadow(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = "rgba(17, 8, 25, 0.46)";
+  ctx.fillRect(x - 7, y + 21, 18, 4);
+}
+
+function getFacing(from: Point, to: Point, currentFacing: WorldFacing) {
+  const deltaX = to.x - from.x;
+  const deltaY = to.y - from.y;
+
+  if (Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
+    return currentFacing;
+  }
+
+  if (Math.abs(deltaX) > Math.abs(deltaY)) {
+    return deltaX > 0 ? "right" : "left";
+  }
+
+  return deltaY > 0 ? "down" : "up";
+}
+
+function renderPlayingScene(
+  ctx: CanvasRenderingContext2D,
+  stage: GameStage,
+  camera: Point,
+  interactedIds: string[],
+  player: Point,
+  facing: WorldFacing,
+  animationMs: number,
+  target: Point | null,
+) {
+  drawBackground(ctx, stage, animationMs);
+
+  if (stage.theme === "rooftops") {
+    drawRooftops(ctx, stage, camera);
+  } else if (stage.theme === "circuit") {
+    drawCircuit(ctx, stage, camera, animationMs);
+  } else if (stage.theme === "garden") {
+    drawGarden(ctx, stage, camera, animationMs);
+  } else {
+    drawObservatory(ctx, stage, camera, animationMs);
+  }
+
+  const fragmentsCollected = collectCount(stage, interactedIds);
+  const exitOpen = fragmentsCollected >= stage.fragmentCount;
+
+  for (const presence of stage.girlPresences) {
+    if (fragmentsCollected < presence.appearAfterFragments) continue;
+    const opacity = 0.42 + (fragmentsCollected / stage.fragmentCount) * 0.48;
+    drawGirlSprite(
+      ctx,
+      presence.state,
+      presence.position.x - camera.x,
+      presence.position.y - camera.y,
+      presence.scale * 2.2,
+    );
+    ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.08})`;
+    ctx.fillRect(
+      presence.position.x - camera.x - 10,
+      presence.position.y - camera.y + 24,
+      26,
+      4,
+    );
+  }
+
+  drawExit(ctx, stage, camera, exitOpen, animationMs);
+
+  for (const item of stage.interactables) {
+    if (interactedIds.includes(item.id)) continue;
+    drawInteractable(
+      ctx,
+      stage,
+      item.kind,
+      {
+        x: item.position.x - camera.x,
+        y: item.position.y - camera.y,
+      },
+      target ? distance(item.position, target) < 10 : false,
+      animationMs,
+    );
+  }
+
+  drawPlayerShadow(ctx, player.x - camera.x, player.y - camera.y);
+  drawHeroSprite(
+    ctx,
+    facing,
+    player.x - camera.x - 10,
+    player.y - camera.y - 16,
+    2.2,
   );
 }
+
+function renderCutsceneScene(
+  ctx: CanvasRenderingContext2D,
+  stage: GameStage,
+  reveal: number,
+  animationMs: number,
+) {
+  drawBackground(ctx, stage, animationMs);
+
+  ctx.fillStyle = stage.palette.groundB;
+  ctx.fillRect(0, 150, canvasSize.width, 90);
+  ctx.fillStyle = stage.palette.path;
+  ctx.fillRect(176, 128, 86, 38);
+  ctx.fillRect(154, 164, 122, 24);
+  ctx.fillStyle = stage.palette.accentSoft;
+  ctx.fillRect(170, 122, 96, 4);
+
+  const glow = 0.2 + (Math.sin(animationMs / 500) + 1) * 0.1;
+  ctx.fillStyle = `rgba(255, 238, 194, ${glow + reveal * 0.18})`;
+  ctx.fillRect(194, 52, 90, 90);
+  ctx.fillStyle = stage.palette.moon;
+  ctx.fillRect(216, 64, 46, 46);
+
+  drawPlayerShadow(ctx, 68, 187);
+  drawHeroSprite(ctx, "right", 58, 150, 2.7);
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.08 + reveal * 0.16})`;
+  ctx.fillRect(206, 188, 42, 5);
+  drawGirlSprite(ctx, "moonwatch", 198, 126, 4.1);
+}
+
+export const StageRenderer = forwardRef<StageRendererHandle, StageRendererProps>(
+  function StageRenderer(
+    { stage, interactedIds, dialogueOpen, mode, cutsceneReveal, onInteract, onExit },
+    ref,
+  ) {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const animationRef = useRef<number | null>(null);
+    const lastFrameRef = useRef<number | null>(null);
+    const animationTimeRef = useRef(0);
+    const stageRef = useRef(stage);
+    const interactedRef = useRef(interactedIds);
+    const dialogueOpenRef = useRef(dialogueOpen);
+    const modeRef = useRef(mode);
+    const cutsceneRevealRef = useRef(cutsceneReveal);
+    const playerRef = useRef<Point>({ ...stage.spawn });
+    const targetRef = useRef<Point | null>(null);
+    const cameraRef = useRef<Point>({ x: 0, y: 0 });
+    const facingRef = useRef<WorldFacing>("right");
+    const pendingActionRef = useRef<PendingAction>(null);
+    const cooldownRef = useRef(0);
+    const snapshotRef = useRef(createInitialSnapshot(stage, interactedIds));
+
+    const resetStage = () => {
+      stageRef.current = stage;
+      interactedRef.current = interactedIds;
+      dialogueOpenRef.current = dialogueOpen;
+      modeRef.current = mode;
+      cutsceneRevealRef.current = cutsceneReveal;
+      playerRef.current = { ...stage.spawn };
+      targetRef.current = null;
+      cameraRef.current = {
+        x: clamp(stage.spawn.x - canvasSize.width / 2, 0, Math.max(0, stage.worldSize.width - canvasSize.width)),
+        y: clamp(stage.spawn.y - canvasSize.height / 2, 0, Math.max(0, stage.worldSize.height - canvasSize.height)),
+      };
+      facingRef.current = "right";
+      pendingActionRef.current = null;
+      cooldownRef.current = 0;
+      snapshotRef.current = createInitialSnapshot(stage, interactedIds);
+    };
+
+    const updateSnapshot = () => {
+      const currentStage = stageRef.current;
+      const fragmentsCollected = collectCount(currentStage, interactedRef.current);
+      snapshotRef.current = {
+        mode: modeRef.current,
+        stageId: currentStage.id,
+        coordinateSystem: "origin: top-left, x+: right, y+: down",
+        player: {
+          x: Math.round(playerRef.current.x),
+          y: Math.round(playerRef.current.y),
+          facing: facingRef.current,
+          targetX: targetRef.current ? Math.round(targetRef.current.x) : null,
+          targetY: targetRef.current ? Math.round(targetRef.current.y) : null,
+        },
+        fragmentsCollected,
+        fragmentsTotal: currentStage.fragmentCount,
+        exitOpen: fragmentsCollected >= currentStage.fragmentCount,
+        exit: currentStage.exit,
+        visibleInteractions: currentStage.interactables
+          .filter((item) => !interactedRef.current.includes(item.id))
+          .map((item) => ({
+            id: item.id,
+            label: item.label,
+            x: item.position.x,
+            y: item.position.y,
+          })),
+      };
+    };
+
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+
+      if (modeRef.current === "cutscene") {
+        renderCutsceneScene(
+          ctx,
+          stageRef.current,
+          cutsceneRevealRef.current,
+          animationTimeRef.current,
+        );
+        updateSnapshot();
+        return;
+      }
+
+      renderPlayingScene(
+        ctx,
+        stageRef.current,
+        cameraRef.current,
+        interactedRef.current,
+        playerRef.current,
+        facingRef.current,
+        animationTimeRef.current,
+        targetRef.current,
+      );
+      updateSnapshot();
+    };
+
+    const triggerNearbyInteraction = () => {
+      if (dialogueOpenRef.current || modeRef.current !== "playing" || cooldownRef.current > 0) {
+        return;
+      }
+
+      const currentStage = stageRef.current;
+      for (const item of currentStage.interactables) {
+        if (interactedRef.current.includes(item.id)) continue;
+        if (distance(playerRef.current, item.position) <= interactionAutoRadius) {
+          targetRef.current = null;
+          pendingActionRef.current = null;
+          cooldownRef.current = 260;
+          onInteract(item.id);
+          return;
+        }
+      }
+
+      if (
+        collectCount(currentStage, interactedRef.current) >= currentStage.fragmentCount &&
+        distance(playerRef.current, currentStage.exit) <= 48
+      ) {
+        targetRef.current = null;
+        pendingActionRef.current = null;
+        cooldownRef.current = 320;
+        onExit();
+      }
+    };
+
+    const step = (deltaMs: number) => {
+      animationTimeRef.current += deltaMs;
+      cooldownRef.current = Math.max(0, cooldownRef.current - deltaMs);
+
+      if (modeRef.current === "playing" && !dialogueOpenRef.current) {
+        if (targetRef.current) {
+          const target = targetRef.current;
+          const from = playerRef.current;
+          const distanceToTarget = distance(from, target);
+          facingRef.current = getFacing(from, target, facingRef.current);
+
+          if (distanceToTarget <= 1.5) {
+            playerRef.current = { x: target.x, y: target.y };
+            targetRef.current = null;
+          } else {
+            const stepDistance = (deltaMs / 1000) * 54;
+            const ratio = Math.min(1, stepDistance / distanceToTarget);
+            playerRef.current = {
+              x: lerp(from.x, target.x, ratio),
+              y: lerp(from.y, target.y, ratio),
+            };
+          }
+        }
+
+        triggerNearbyInteraction();
+      }
+
+      const currentStage = stageRef.current;
+      const cameraTargetX = clamp(
+        playerRef.current.x - canvasSize.width / 2,
+        0,
+        Math.max(0, currentStage.worldSize.width - canvasSize.width),
+      );
+      const cameraTargetY = clamp(
+        playerRef.current.y - canvasSize.height / 2,
+        0,
+        Math.max(0, currentStage.worldSize.height - canvasSize.height),
+      );
+
+      cameraRef.current = {
+        x: lerp(cameraRef.current.x, cameraTargetX, 0.14),
+        y: lerp(cameraRef.current.y, cameraTargetY, 0.14),
+      };
+
+      render();
+    };
+
+    useImperativeHandle(ref, () => ({
+      advanceTime(ms: number) {
+        step(ms);
+      },
+      getSnapshot() {
+        return snapshotRef.current;
+      },
+    }));
+
+    useEffect(() => {
+      stageRef.current = stage;
+      interactedRef.current = interactedIds;
+      dialogueOpenRef.current = dialogueOpen;
+      modeRef.current = mode;
+      cutsceneRevealRef.current = cutsceneReveal;
+      render();
+    }, [cutsceneReveal, dialogueOpen, interactedIds, mode, stage]);
+
+    useEffect(() => {
+      resetStage();
+      render();
+    }, [stage.id]);
+
+    useEffect(() => {
+      const animate = (timestamp: number) => {
+        if (lastFrameRef.current === null) {
+          lastFrameRef.current = timestamp;
+        }
+
+        const delta = Math.min(34, timestamp - lastFrameRef.current);
+        lastFrameRef.current = timestamp;
+        step(delta);
+        animationRef.current = window.requestAnimationFrame(animate);
+      };
+
+      animationRef.current = window.requestAnimationFrame(animate);
+
+      return () => {
+        if (animationRef.current !== null) {
+          window.cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+      };
+    }, []);
+
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const pickTarget = (worldPoint: Point) => {
+        for (const item of stageRef.current.interactables) {
+          if (interactedRef.current.includes(item.id)) continue;
+          if (distance(item.position, worldPoint) <= item.radius + 10) {
+            pendingActionRef.current = { type: "move" };
+            targetRef.current = { ...item.position };
+            return;
+          }
+        }
+
+        const fragmentsCollected = collectCount(stageRef.current, interactedRef.current);
+        if (
+          fragmentsCollected >= stageRef.current.fragmentCount &&
+          distance(stageRef.current.exit, worldPoint) <= 28
+        ) {
+          pendingActionRef.current = { type: "exit" };
+          targetRef.current = { ...stageRef.current.exit };
+          return;
+        }
+
+        pendingActionRef.current = { type: "move" };
+        targetRef.current = {
+          x: clamp(worldPoint.x, 18, stageRef.current.worldSize.width - 18),
+          y: clamp(worldPoint.y, 86, stageRef.current.worldSize.height - 16),
+        };
+      };
+
+      const handlePointerDown = (event: PointerEvent) => {
+        if (dialogueOpenRef.current || modeRef.current !== "playing") return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvasSize.width / rect.width;
+        const scaleY = canvasSize.height / rect.height;
+        const canvasX = (event.clientX - rect.left) * scaleX;
+        const canvasY = (event.clientY - rect.top) * scaleY;
+        const worldPoint = {
+          x: canvasX + cameraRef.current.x,
+          y: canvasY + cameraRef.current.y,
+        };
+
+        pickTarget(worldPoint);
+      };
+
+      canvas.addEventListener("pointerdown", handlePointerDown);
+      return () => {
+        canvas.removeEventListener("pointerdown", handlePointerDown);
+      };
+    }, []);
+
+    return (
+      <canvas
+        ref={canvasRef}
+        className="game-canvas"
+        width={canvasSize.width}
+        height={canvasSize.height}
+        aria-label={`${stage.label}: ${stage.stageTitle}`}
+      />
+    );
+  },
+);
