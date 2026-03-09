@@ -6,6 +6,7 @@ export interface Chapter {
   backgroundColor: string;
 }
 
+export const chapters: Chapter[] = [
   {
     title: 'Mujer Amante',
     text: 'Hay noches que parecen inventadas para mirarte.',
